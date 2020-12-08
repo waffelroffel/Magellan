@@ -1,0 +1,25 @@
+{
+  "name": "magellan",
+  "description": "CRDT-based P2P file synchronization",
+  "version": "0.0.1",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/waffelroffel/Magellan.git"
+  },
+  "scripts": {
+    "deps": "npm i",
+    "run": "ts-node src/Ship.ts testroot/test1/root",
+    "build": "tsc"
+  },
+  "dependencies": {
+    "chokidar": "^3.4.2",
+    "hyperswarm": "^2.15.2",
+    "uuid": "^8.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^14.11.8",
+    "@types/uuid": "^8.3.0",
+    "ts-node": "^9.0.0",
+    "typescript": "^4.0.3"
+  }
+}
