@@ -5,6 +5,7 @@
 		"typeRoots": ["./src/types", "./node_modules/@types"],
 		"strict": true,
 		"outDir": "build"
+		//"noUnusedLocals": true
 	},
 	"include": ["src"],
 	"exclude": ["node_modules", "testroot", "build"]
