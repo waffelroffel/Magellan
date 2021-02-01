@@ -1,14 +1,13 @@
-import IndexTable from "./IndexTable";
+import CargoList from "./CargoList"
 
-const path = String.raw`root`;
-const index = new IndexTable(path)
+const root = String.raw`testroot`
+const cl = new CargoList(root)
 
-const i = 0
-if (i === 0) {
-    index.init()
-    index.show()
-    index.save()
+if (false) {
+	cl.initfromroot()
+	cl.show()
+	cl.save()
 } else {
-    index.load()
-    index.show()
+	cl.load()
+	cl.show()
 }
