@@ -48,7 +48,7 @@ export interface Item {
 
 const tempuser = "bob"
 export default class CargoList {
-	index: Map<string, Item[]>
+	private index: Map<string, Item[]>
 	private indexpath: string
 	private rootpath: string
 	private tablefile: string = "indextable.json"
@@ -140,6 +140,22 @@ export default class CargoList {
 		return item
 	}
 
+	[Symbol.iterator](): IterableIterator<Item[]> {
+		return this.index.values()
+	}
+
+	get(k: string): Item[] | undefined {
+		return this.index.get(k)
+	}
+
+	set(k: string, v: Item[]): void {
+		this.index.set(k, v)
+	}
+
+	merge(v: Item[]): void {
+		v.forEach(ri => this.apply(ri))
+	}
+
 	apply(remoteitem: Item): boolean {
 		if (remoteitem.type === ItemTypes.File) {
 			if (remoteitem.lastAction === ActionTypes.Add)
@@ -195,6 +211,7 @@ export default class CargoList {
 			return true
 		}
 		if (olditem.lastAction === ActionTypes.Add) {
+			// for pure lww, dont add new entry?
 			const [item, n] = this.rsfile.addadd(olditem, newitem)
 			this.update(item)
 			return n === 1
@@ -273,6 +290,7 @@ export default class CargoList {
 			return true
 		}
 		if (olditem.lastAction === ActionTypes.Add) {
+			// TODO: change to new entry instead of overwriting old
 			const cond =
 				olditem.lastModified !== newitem.lastModified
 					? olditem.lastModified > newitem.lastModified

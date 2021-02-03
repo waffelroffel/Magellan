@@ -10,6 +10,7 @@ import {
 import { join } from "path"
 import { v4 as uuid4 } from "uuid"
 import CargoList, { ActionTypes, Item, ItemTypes } from "./CargoList"
+import Log from "./Log"
 import { ct, cts } from "./utils"
 
 export default class Vessel {
@@ -21,6 +22,8 @@ export default class Vessel {
 	watcher: FSWatcher
 	index: CargoList
 	skiplist = new Set<string>()
+	log = new Log()
+	init = true
 
 	network: Vessel[] = []
 
@@ -35,6 +38,13 @@ export default class Vessel {
 		this.watcher = chokidar(root, { persistent: true })
 
 		this.setupEvents()
+	}
+
+	rejoin() {
+		// for rejoining existing network
+	}
+	startnew() {
+		// when starting a new network
 	}
 
 	private setupEvents() {
@@ -71,9 +81,14 @@ export default class Vessel {
 					this.passToIndex(path, ItemTypes.Folder, ActionTypes.Remove, 0)
 				// always remove existing
 			)
-			.on("error", (error: any) => this.log("error", error))
-			.on("ready", () => this.log(this.user, "PLVS VLTRA!"))
-		// ready: gets called after all initial files are added
+			.on("error", (error: any) => this.logger("error", error))
+			.on("ready", () => {
+				// ready: gets called AFTER all initial files are added
+				this.init = false
+				this.index.save()
+				this.logger(this.user, "PLVS VLTRA!")
+				//this.logger(this.log.history)
+			})
 	}
 
 	private passToIndex(
@@ -96,14 +111,12 @@ export default class Vessel {
 			const latest = this.index.getLatest(this.removeRoot(path))
 			if (latest) item.uuid = latest.uuid
 		}
-
-		// this.index.getLatest(path) ?? CargoList...
-		// change must update local (onDevice) if possible, add can update or extend depending on the resolve policy
+		this.log.push(item, this.user)
 		const applied = this.index.apply(item)
-		this.log(this.user, action, path, applied)
-		if (!applied) return
-		this.index.save() // temp disable save during init
-		const rs = item.type === ItemTypes.File ? createReadStream(path) : undefined // TODO: fix later
+		this.logger(this.user, action, path, applied)
+		if (!applied || this.init) return
+		this.index.save()
+		const rs = item.type === ItemTypes.File ? createReadStream(path) : undefined // TODO: fix undefined later
 		this.network.forEach(v => v.applyIncoming(item, rs))
 	}
 
@@ -111,14 +124,13 @@ export default class Vessel {
 		return path.substring(this.rooti)
 	}
 
-	private log(...msg: any[]): void {
+	private logger(...msg: any[]): void {
 		console.log(cts(), ...msg)
 	}
 
 	applyIncoming(item: Item, rs?: ReadStream): void {
-		console.log(item)
 		const applied = this.index.apply(item)
-		this.log(this.user, "REMOTE", item.lastAction, item.path, applied)
+		this.logger(this.user, "REMOTE", item.lastAction, item.path, applied)
 		if (!applied) return
 		const fullpath = join(this.root, item.path)
 		if (item.type === ItemTypes.Folder && !existsSync(fullpath)) {
@@ -129,10 +141,38 @@ export default class Vessel {
 			this.skiplist.add(fullpath)
 			rs?.pipe(createWriteStream(fullpath))
 		}
+		this.index.save()
 	}
 
-	addToNetwork(vessel: Vessel) {
+	updateCargo(index: CargoList, tempvessel: Vessel): void {
+		this.logger(this.user, "DWN")
+		for (const v of index) {
+			v.forEach(i => {
+				const reqio = this.index.apply(i)
+				if (!reqio) return
+				const fullpath = join(this.root, i.path)
+				if (i.type === ItemTypes.Folder) {
+					this.skiplist.add(fullpath)
+					mkdirSync(fullpath, { recursive: true })
+				} else if (i.type === ItemTypes.File) {
+					this.skiplist.add(fullpath)
+					const wr = createWriteStream(fullpath)
+					tempvessel.fetchRS(i.path).pipe(wr)
+				}
+			})
+		}
+		this.index.save()
+	}
+
+	fetchRS(path: string): ReadStream {
+		return createReadStream(join(this.root, path)) // TODO: clean stream creation
+	}
+
+	async addToNetwork(vessel: Vessel): Promise<void> {
 		this.network.push(vessel)
+		this.updateCargo(vessel.index, vessel)
+		//vessel.updateCargo(this.index)
 	}
 }
-//new Vessel("charlie", join("testroot", "dir1", "root"))
+
+//new Vessel("charlie", join("testroot", "dave", "root"))
