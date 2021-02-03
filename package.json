@@ -8,10 +8,8 @@
 	},
 	"scripts": {
 		"deps": "npm i",
-		"run": "ts-node src/Ship.ts testroot/test1/root",
 		"setup": "ts-node testing/setup_env.test.ts",
-		"test": "ts-node testing/test_run.test.ts",
-		"build": "tsc"
+		"test": "ts-node testing/test_run.test.ts"
 	},
 	"dependencies": {
 		"chokidar": "^3.5.1",

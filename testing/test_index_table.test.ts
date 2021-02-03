@@ -1,6 +1,7 @@
-import CargoList from "./CargoList"
+import { join } from "path"
+import CargoList from "../src/CargoList"
 
-const root = String.raw`testroot`
+const root = join("testroot", "dave", "root")
 const cl = new CargoList(root)
 
 if (false) {
