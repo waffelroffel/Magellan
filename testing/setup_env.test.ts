@@ -1,5 +1,7 @@
-import { mkdirSync, writeFileSync } from "fs"
+import { mkdirSync, rmdirSync, writeFileSync } from "fs"
 import { join } from "path"
+
+rmdirSync("testroot", { recursive: true })
 
 const p0 = "testroot"
 const p1 = join(p0, "dave")
