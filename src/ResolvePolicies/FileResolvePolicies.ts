@@ -4,7 +4,7 @@ import fileresolvepolicies from "./fileresolves"
 export type ResolveLogic = (item1: Item, item2: Item) => [Item, number]
 
 //TODO clean values
-const enum FileResolveOption {
+export const enum FileResolveOption {
 	LWW = 0,
 	DUP = 1,
 }
@@ -38,8 +38,10 @@ function assign(key: string, i: number) {
 	return ps ? ps[i] : dummy
 }
 
-export default function makemap(config: FileRPConfig): FileResolveMap {
-	return {
+export default function makemap(
+	config: FileRPConfig
+): [FileResolveMap, Map<string, FileResolveOption>] {
+	const frm = {
 		addadd: assign("addadd", config.addadd),
 		addrem: assign("addrem", config.addrem),
 		addchg: assign("addchg", config.addrem),
@@ -47,6 +49,16 @@ export default function makemap(config: FileRPConfig): FileResolveMap {
 		remchg: assign("remchg", config.addrem),
 		chgchg: assign("chgchg", config.addrem),
 	}
+
+	const fr = new Map<string, FileResolveOption>()
+		.set("addadd", config.addadd)
+		.set("addrem", config.addrem)
+		.set("addchg", config.addrem)
+		.set("remrem", config.addrem)
+		.set("remchg", config.addrem)
+		.set("chgchg", config.addrem)
+
+	return [frm, fr]
 }
 
 export const LWWConfig = {
