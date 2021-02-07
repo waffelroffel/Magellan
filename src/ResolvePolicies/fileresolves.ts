@@ -30,11 +30,11 @@ const chgchgdup: ResolveLogic = (item1, item2) =>
 	item1.lastModified <= item2.lastModified ? [item2, 1] : [item1, 0]
 
 const fileresolvepolicies = new Map<string, ResolveLogic[]>()
-fileresolvepolicies.set("addadd", [addaddlww, addadddup])
-fileresolvepolicies.set("addrem", [addremlww, addremdup])
-fileresolvepolicies.set("addchg", [addchglww, addchgdup])
-fileresolvepolicies.set("remrem", [addaddlww, addadddup])
-fileresolvepolicies.set("remchg", [remchglww])
-fileresolvepolicies.set("chgchg", [chgchglww, chgchgdup])
+	.set("addadd", [addaddlww, addadddup])
+	.set("addrem", [addremlww, addremdup])
+	.set("addchg", [addchglww, addchgdup])
+	.set("remrem", [addaddlww, addadddup])
+	.set("remchg", [remchglww])
+	.set("chgchg", [chgchglww, chgchgdup])
 
 export default fileresolvepolicies

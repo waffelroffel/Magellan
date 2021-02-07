@@ -1,8 +1,15 @@
-import { readdirSync, readFileSync, writeFileSync } from "fs"
+import {
+	existsSync,
+	lstatSync,
+	readdirSync,
+	readFileSync,
+	writeFileSync,
+} from "fs"
 import { join } from "path"
 import { v4 as uuid4 } from "uuid"
 import makemap, {
 	FileResolveMap,
+	FileResolveOption,
 	FileRPConfig,
 	LWWConfig,
 } from "./ResolvePolicies/FileResolvePolicies"
@@ -53,6 +60,7 @@ export default class CargoList {
 	private rootpath: string
 	private tablefile: string = "indextable.json"
 	private rsfile: FileResolveMap
+	private rsfilep: Map<string, FileResolveOption>
 	//private rsfolfer =
 	//private duppolicy = 0 // 0: latest timestamp wins, 1: deterministic rename one
 
@@ -60,10 +68,14 @@ export default class CargoList {
 		this.index = new Map()
 		this.rootpath = root
 		this.indexpath = join(root, this.tablefile)
-		this.rsfile = makemap(fileconfig ?? LWWConfig)
+		const rs = makemap(fileconfig ?? LWWConfig)
+		this.rsfile = rs[0]
+		this.rsfilep = rs[1]
 	}
 
+	// TODO: remove in favor of mergewithfile
 	load(): void {
+		if (!existsSync(this.indexpath)) return
 		this.index = new Map(
 			JSON.parse(readFileSync(this.indexpath, { encoding: "utf8" }))
 		)
@@ -152,8 +164,21 @@ export default class CargoList {
 		this.index.set(k, v)
 	}
 
+	/**
+	 * @deprecated Remove soon
+	 */
 	merge(v: Item[]): void {
 		v.forEach(ri => this.apply(ri))
+	}
+
+	// TODO: need testing
+	mergewithlocal(): void {
+		if (!existsSync(this.indexpath)) return
+		const oldindex = JSON.parse(
+			readFileSync(this.indexpath, { encoding: "utf8" })
+		) as [string, Item][]
+		oldindex.forEach(([k, v]) => this.apply(v))
+		this.save()
 	}
 
 	apply(remoteitem: Item): boolean {
@@ -194,63 +219,70 @@ export default class CargoList {
 		else itemlist.push(item)
 	}
 
-	private update(newitem: Item): void {
+	private update(newitem: Item, rp: FileResolveOption | undefined): void {
+		if (rp === FileResolveOption.LWW) {
+			this.set(newitem.path, [newitem])
+			return
+		}
 		const itemlist = this.index.get(newitem.path)
 		if (!itemlist) return
 		const i = itemlist.findIndex(olditem => olditem.uuid === newitem.uuid)
-		if (i == -1) return
+		if (i === -1) return
 		itemlist[i] = newitem
 	}
 
 	private applyADDFile(newitem: Item): boolean {
 		if (newitem.path === this.indexpath) return false
-		const olditem = this.find(newitem)
+		let olditem = this.find(newitem) // ?? newitem
+		let pushed = false
 
 		if (!olditem) {
+			// remove, include in update
 			this.push(newitem)
-			return true
+			olditem = newitem
+			pushed = true
 		}
 		if (olditem.lastAction === ActionTypes.Add) {
-			// for pure lww, dont add new entry?
 			const [item, n] = this.rsfile.addadd(olditem, newitem)
-			this.update(item)
-			return n === 1
+			this.update(item, this.rsfilep.get("addadd"))
+			return pushed || n === 1
 		}
 		if (olditem.lastAction === ActionTypes.Remove) {
 			const [item, n] = this.rsfile.addrem(olditem, newitem)
-			this.update(item)
-			return n === 1
+			this.update(item, this.rsfilep.get("addrem"))
+			return pushed || n === 1
 		}
 		if (olditem.lastAction === ActionTypes.Change) {
 			const [item, n] = this.rsfile.addchg(olditem, newitem)
-			this.update(item)
-			return n === 1
+			this.update(item, this.rsfilep.get("addchg"))
+			return pushed || n === 1
 		}
-		return false
+		return pushed
 	}
 
 	private applyREMOVEFile(newitem: Item): boolean {
 		if (newitem.path === this.indexpath) return false
-		const olditem = this.find(newitem)
+		let olditem = this.find(newitem)
+		let pushed = false
 
 		if (!olditem) {
 			this.push(newitem)
-			return true
+			olditem = newitem
+			pushed = true
 		}
 		if (olditem.lastAction === ActionTypes.Add) {
 			const [item, n] = this.rsfile.addadd(olditem, newitem)
-			this.update(item)
+			this.update(item, this.rsfilep.get("addrem"))
 			return n === 1
 		}
 		if (olditem.lastAction === ActionTypes.Remove) {
-			// have oldest persist?
 			const [item, n] = this.rsfile.addrem(olditem, newitem)
-			this.update(item)
+			this.update(item, this.rsfilep.get("remrem"))
 			return n === 1
 		}
 		if (olditem.lastAction === ActionTypes.Change) {
 			const [item, n] = this.rsfile.addchg(olditem, newitem)
-			this.update(item)
+			this.update(item, this.rsfilep.get("remchg"))
 			return n === 1
 		}
 		return false
@@ -258,24 +290,27 @@ export default class CargoList {
 
 	private applyCHANGEFile(newitem: Item): boolean {
 		if (newitem.path === this.indexpath) return false
-		const olditem = this.find(newitem)
+		let olditem = this.find(newitem)
+		let pushed = false
+
 		if (!olditem) {
 			this.push(newitem)
-			return true
+			olditem = newitem
+			pushed = true
 		}
 		if (olditem.lastAction === ActionTypes.Add) {
 			const [item, n] = this.rsfile.addadd(olditem, newitem)
-			this.update(item)
+			this.update(item, this.rsfilep.get("addchg"))
 			return n === 1
 		}
 		if (olditem.lastAction === ActionTypes.Remove) {
 			const [item, n] = this.rsfile.addrem(olditem, newitem)
-			this.update(item)
+			this.update(item, this.rsfilep.get("remchg"))
 			return n === 1
 		}
 		if (olditem.lastAction === ActionTypes.Change) {
 			const [item, n] = this.rsfile.addchg(olditem, newitem)
-			this.update(item)
+			this.update(item, this.rsfilep.get("chgchg"))
 			return n === 1
 		}
 		return false
