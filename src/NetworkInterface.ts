@@ -1,44 +1,50 @@
-import { v4 } from "uuid"
+import { v4 as uuid4 } from "uuid"
 import { Medium } from "./enums"
-import { NID, Item, Streamable } from "./interfaces"
-import Proxy from "./Proxies/LocalProxy"
+import { NID, Item, StreamCreator } from "./interfaces"
+import LocalProxy from "./Proxies/LocalProxy"
 import Vessel from "./Vessel"
+import Proxy from "./Proxies/Proxy"
 
 export default class NetworkInterface {
-	ip: string
-	port: string
+	nid: NID
 	network: Proxy[] = []
 
 	constructor() {
-		this.ip = v4()
-		this.port = v4()
+		this.nid = this.getIpPort()
 	}
 
-	nid(): NID {
-		return { ip: this.ip, port: this.port }
+	private getIpPort() {
+		return { ip: uuid4(), port: uuid4() }
 	}
 
-	addNode(nid: NID, type: Medium, vessel?: Vessel): Proxy {
-		const proxy = new Proxy(nid, type, vessel)
+	addNode(type: Medium, vessel?: Vessel, nid?: NID): Proxy {
+		const proxy = this.createProxy(type, vessel, nid)
+		if (!proxy) throw Error("NetworkInterface.addNode: null from createProxy")
 		this.network.push(proxy)
 		return proxy
 	}
 
-	removeNode(nid: NID): void {
-		this.network = this.network.filter(p => !p.comp(nid))
+	private createProxy(type: Medium, vessel?: Vessel, nid?: NID): Proxy | null {
+		switch (type) {
+			case Medium.local:
+				return vessel ? new LocalProxy(vessel) : null
+			default:
+				return null
+		}
 	}
 
-	broadcast(src: NID, item: Item, rs?: Streamable): void {
-		this.network.forEach(p => p.send(src, item, rs))
+	removeNode(proxy: Proxy): void {
+		this.network = this.network.filter(p => p !== proxy)
 	}
 
-	// clean async
-	requestItems(
-		src: NID,
-		dst: NID,
-		items: Item[]
-	): Promise<Streamable>[] | null {
-		const proxy = this.network.find(p => !p.comp(dst))
-		return proxy?.fetch(src, items) ?? null
+	broadcast(item: Item, sc: StreamCreator): void {
+		this.network.forEach(p => p.send(item, sc(item, p.type), this.nid))
 	}
+
+	/*
+	requestItems(src: NID, dst: ABCVessel, items: Item[]): Streamable[] | null {
+		const proxy = this.network.find(p => p === dst)
+		return proxy?.fetch(items, src) ?? null
+	}
+	*/
 }

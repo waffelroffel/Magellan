@@ -10,12 +10,14 @@ import {
 } from "fs"
 import { join } from "path"
 import { v4 as uuid4 } from "uuid"
-import { ABCVessel } from "./ABCVessel"
+import { ABCVessel } from "./Proxies/ABCVessel"
 import CargoList from "./CargoList"
 import { ItemTypes, ActionTypes, Medium } from "./enums"
-import { Item, Streamable } from "./interfaces"
+import { Item, NID, Streamable, StreamCreator } from "./interfaces"
 import NetworkInterface from "./NetworkInterface"
 import { cts, ct } from "./utils"
+import Proxy from "./Proxies/Proxy"
+import LocalProxy from "./Proxies/LocalProxy"
 
 /**
  * TODO
@@ -50,6 +52,10 @@ export default class Vessel extends ABCVessel {
 
 		this.watcher = chokidar(root, { persistent: true })
 		this.setupEvents()
+	}
+
+	private nid(): NID {
+		return this.networkinterface.nid
 	}
 
 	rejoin(): Vessel {
@@ -109,7 +115,7 @@ export default class Vessel extends ABCVessel {
 			action,
 			this.user
 		)
-		item.uuid = this.index.getLatest(item.path)?.uuid ?? item.uuid
+		item.uuid = this.index.getLatest(item.path)?.uuid ?? item.uuid // TODO: check
 
 		//this.log.push(item, this.user)
 		const applied = this.index.apply(item)
@@ -118,33 +124,29 @@ export default class Vessel extends ABCVessel {
 
 		this.index.save()
 
-		const rs =
-			item.type === ItemTypes.File && item.lastAction !== ActionTypes.Remove
-				? this.createRS(item.path)
-				: null
-		this.networkinterface.broadcast(this.networkinterface.nid(), item, rs)
+		this.networkinterface.broadcast(item, this.createSC(this.root))
 	}
 
 	applyIncoming(item: Item, rs?: Streamable): void {
 		const applied = this.index.apply(item)
-		this.logger(this.user, "REMOTE", item.lastAction, item.path, applied)
+		this.logger(this.user, "REMOTE", item.lastAction, item.path)
 		if (!applied) return
 
-		const fullpath = join(this.root, item.path)
-		if (item.type === ItemTypes.Folder) this.applyFolderIO(item, fullpath)
-		else if (item.type === ItemTypes.File) this.applyFileIO(item, fullpath, rs)
+		const full = join(this.root, item.path)
+		if (item.type === ItemTypes.Folder) this.applyFolderIO(item, full)
+		else if (item.type === ItemTypes.File) this.applyFileIO(item, full, rs)
 
 		this.index.save()
 	}
 
-	private applyFolderIO(item: Item, fullpath: string) {
-		if (item.lastAction !== ActionTypes.Remove && existsSync(fullpath)) {
+	private applyFolderIO(item: Item, fullpath: string): void {
+		if (item.lastAction === ActionTypes.Remove && existsSync(fullpath)) {
 			this.skiplist.add(fullpath)
 			rmdirSync(fullpath, { recursive: true })
-		} else if (item.lastAction !== ActionTypes.Add && !existsSync(fullpath)) {
+		} else if (item.lastAction === ActionTypes.Add && !existsSync(fullpath)) {
 			this.skiplist.add(fullpath)
 			mkdirSync(fullpath, { recursive: true })
-		}
+		} else throw Error("Vessel.applyFolderIO: illegal argument")
 	}
 
 	private applyFileIO(item: Item, fullpath: string, rs?: Streamable) {
@@ -157,34 +159,42 @@ export default class Vessel extends ABCVessel {
 		}
 	}
 
-	updateCargo(index: CargoList, proxy: ABCVessel): void {
+	private updateCargo(index: CargoList, proxy: Proxy): void {
 		this.logger(this.user, "DWN")
-		for (const v of index) {
-			v.forEach(i => {
-				const applied = this.index.apply(i)
-				if (!applied) return
 
-				const fullpath = join(this.root, i.path)
-				this.skiplist.add(fullpath)
+		const newitems: Item[] = []
+		for (const lst of index)
+			lst.forEach(item => (this.index.apply(item) ? newitems.push(item) : null))
 
-				if (i.type === ItemTypes.Folder) this.applyFolderIO(i, fullpath)
-				else if (i.type === ItemTypes.File)
-					this.applyFileIO(i, fullpath, proxy.createRS(i.path))
-			})
-		}
+		proxy.fetch(newitems, this.nid()).forEach((rs, i) => {
+			const item = newitems[i]
+			const full = join(this.root, item.path)
+			if (item.type === ItemTypes.Folder) this.applyFolderIO(item, full)
+			else if (item.type === ItemTypes.File) this.applyFileIO(item, full, rs)
+		})
+
 		this.index.save()
 	}
 
-	createRS(path: string) {
-		return createReadStream(join(this.root, path))
+	createSC(root: string): StreamCreator {
+		// TODO clean
+		const sc: StreamCreator = (item, type) => {
+			switch (type) {
+				case Medium.local:
+					return item.type === ItemTypes.File &&
+						item.lastAction !== ActionTypes.Remove
+						? createReadStream(join(root, item.path))
+						: null
+				default:
+					return null
+			}
+		}
+		return sc
 	}
 
-	async addVesselToNetwork(vessel: Vessel): Promise<void> {
-		const temp = { ip: `local:${this.user}`, port: `local:${this.user}` }
-		const proxy = this.networkinterface.addNode(temp, Medium.local, vessel)
-		const index = proxy.fetchIndex(this.networkinterface.nid())
-		if (index instanceof CargoList) this.updateCargo(index, proxy)
+	addLocalVessel(vessel: Vessel): void {
+		const proxy = this.networkinterface.addNode(Medium.local, vessel)
+		if (proxy instanceof LocalProxy) this.updateCargo(proxy.fetchIndex(), proxy)
+		else throw Error("Vessel.addLocalVessel: instance not LocalProxy")
 	}
 }
-
-//new Vessel("charlie", join("testroot", "dave", "root"))

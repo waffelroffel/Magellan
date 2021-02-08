@@ -138,21 +138,19 @@ export default class CargoList {
 		this.save()
 	}
 
-	apply(remoteitem: Item): boolean {
-		if (remoteitem.type === ItemTypes.File) {
-			if (remoteitem.lastAction === ActionTypes.Add)
-				return this.applyADDFile(remoteitem)
-			if (remoteitem.lastAction === ActionTypes.Remove)
-				return this.applyREMOVEFile(remoteitem)
-			if (remoteitem.lastAction === ActionTypes.Change)
-				return this.applyCHANGEFile(remoteitem)
+	apply(item: Item): boolean {
+		if (item.type === ItemTypes.File) {
+			if (item.lastAction === ActionTypes.Add) return this.applyADDFile(item)
+			if (item.lastAction === ActionTypes.Remove)
+				return this.applyREMOVEFile(item)
+			if (item.lastAction === ActionTypes.Change)
+				return this.applyCHANGEFile(item)
 		}
-		if (remoteitem.lastAction === ActionTypes.Add)
-			return this.applyADDFolder(remoteitem)
-		if (remoteitem.lastAction === ActionTypes.Remove)
-			return this.applyREMOVEFolder(remoteitem)
-		if (remoteitem.lastAction === ActionTypes.Change)
-			throw Error("Folder CHG should not be happening")
+		if (item.lastAction === ActionTypes.Add) return this.applyADDFolder(item)
+		if (item.lastAction === ActionTypes.Remove)
+			return this.applyREMOVEFolder(item)
+		if (item.lastAction === ActionTypes.Change)
+			throw Error("CargoList.apply: illegal argument (folder CHG)")
 		return false
 	}
 
@@ -299,7 +297,7 @@ export default class CargoList {
 			return cond
 		}
 		if (olditem.lastAction === ActionTypes.Change) {
-			throw Error("Folder CHG->... event should not be happening")
+			throw Error("CargoList.applyADDFolder: olditem.lastAction === CHG")
 		}
 		return false
 	}
@@ -329,7 +327,7 @@ export default class CargoList {
 			return false
 		}
 		if (olditem.lastAction === ActionTypes.Change) {
-			throw Error("Folder CHG->... event should not be happening")
+			throw Error("CargoList.applyREMOVEFolder: olditem.lastAction === CHG")
 		}
 		return false
 	}

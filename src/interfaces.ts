@@ -1,6 +1,12 @@
 import { Socket } from "net"
 import { ReadStream } from "fs"
-import { TombTypes, ItemTypes, ActionTypes, FileResolveOption } from "./enums"
+import {
+	TombTypes,
+	ItemTypes,
+	ActionTypes,
+	FileResolveOption,
+	Medium,
+} from "./enums"
 
 // ---------------- CARGOLIST ----------------
 export interface Tomb {
@@ -20,6 +26,9 @@ export interface Item {
 	creator?: string //TODO
 	reachable?: boolean //TODO
 }
+
+// ---------------- VESSEL ----------------
+export type StreamCreator = (items: Item, type: Medium) => Streamable
 
 // ---------------- LOG ----------------
 export interface LogId {

@@ -1,16 +1,13 @@
 import { FileResolveOption } from "../enums"
-import { ResolveLogic, Item, FileRPConfig, FileResolveMap } from "../interfaces"
+import { ResolveLogic, FileRPConfig, FileResolveMap } from "../interfaces"
 import fileresolvepolicies from "./fileresolves"
 
 const fsp: Map<string, ResolveLogic[]> = fileresolvepolicies
 
-function dummy(item1: Item, item2: Item): [Item, number] {
-	throw Error("File resolve policy assignment failed")
-}
-
-function assign(key: string, i: number) {
+function assign(key: string, i: number): ResolveLogic {
 	const ps = fsp.get(key)
-	return ps ? ps[i] : dummy
+	if (!ps) throw Error("FileResolvePolicies.assign: undefined from get")
+	return ps[i]
 }
 
 export default function makemap(
