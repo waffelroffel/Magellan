@@ -1,31 +1,6 @@
-import { Item } from "../CargoList"
+import { FileResolveOption } from "../enums"
+import { ResolveLogic, Item, FileRPConfig, FileResolveMap } from "../interfaces"
 import fileresolvepolicies from "./fileresolves"
-
-export type ResolveLogic = (item1: Item, item2: Item) => [Item, number]
-
-//TODO clean values
-export const enum FileResolveOption {
-	LWW = 0,
-	DUP = 1,
-}
-
-export interface FileRPConfig {
-	addadd: FileResolveOption
-	addrem: FileResolveOption
-	addchg: FileResolveOption
-	remrem: FileResolveOption
-	remchg: FileResolveOption
-	chgchg: FileResolveOption
-}
-
-export interface FileResolveMap {
-	addadd: ResolveLogic
-	addrem: ResolveLogic
-	addchg: ResolveLogic
-	remrem: ResolveLogic
-	remchg: ResolveLogic
-	chgchg: ResolveLogic
-}
 
 const fsp: Map<string, ResolveLogic[]> = fileresolvepolicies
 

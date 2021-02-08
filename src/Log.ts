@@ -1,14 +1,4 @@
-import { Item } from "./CargoList"
-
-interface LogId {
-	n: number
-	user: string
-}
-
-interface LogItem {
-	id: LogId
-	item: Item
-}
+import { LogItem, Item, LogId } from "./interfaces"
 
 export default class Log {
 	history: LogItem[] = []

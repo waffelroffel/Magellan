@@ -1,4 +1,4 @@
-import { Streamable } from "./NetworkInterface"
+import { Streamable } from "./interfaces"
 
 export abstract class ABCVessel {
 	constructor() {}

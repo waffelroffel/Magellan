@@ -1,4 +1,4 @@
-import { ResolveLogic } from "./FileResolvePolicies"
+import { ResolveLogic } from "../interfaces"
 
 const addaddlww: ResolveLogic = (item1, item2) => {
 	const cond =

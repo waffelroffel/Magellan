@@ -1,57 +1,10 @@
-import {
-	existsSync,
-	lstatSync,
-	readdirSync,
-	readFileSync,
-	writeFileSync,
-} from "fs"
+import { existsSync, readFileSync, writeFileSync, readdirSync } from "fs"
 import { join } from "path"
 import { v4 as uuid4 } from "uuid"
-import makemap, {
-	FileResolveMap,
-	FileResolveOption,
-	FileRPConfig,
-	LWWConfig,
-} from "./ResolvePolicies/FileResolvePolicies"
+import { FileResolveOption, ItemTypes, ActionTypes, TombTypes } from "./enums"
+import { Item, FileResolveMap, FileRPConfig } from "./interfaces"
+import makemap, { LWWConfig } from "./ResolvePolicies/FileResolvePolicies"
 import { ct } from "./utils"
-
-export const enum ItemTypes {
-	//RootFolder,
-	//RootFile,
-	Folder,
-	File,
-}
-
-const enum TombTypes {
-	Moved,
-	Renamed,
-	Deleted,
-}
-
-export const enum ActionTypes {
-	Add = "ADD",
-	Remove = "REM",
-	Move = "MOV",
-	Change = "CHG",
-	Rename = "RNM",
-}
-interface Tomb {
-	type: TombTypes
-	movedTo?: string
-}
-
-export interface Item {
-	path: string
-	uuid: string // Buffer
-	type: ItemTypes
-	lastModified: number
-	lastAction: ActionTypes // TODO: referrence to LOG/ LogItem id
-	lastActionBy: string
-	onDevice?: boolean
-	tomb?: Tomb
-	creator?: string //TODO
-	reachable?: boolean //TODO
-}
 
 const tempuser = "bob"
 export default class CargoList {
@@ -71,6 +24,10 @@ export default class CargoList {
 		const rs = makemap(fileconfig ?? LWWConfig)
 		this.rsfile = rs[0]
 		this.rsfilep = rs[1]
+	}
+
+	testGet(): Map<string, Item[]> {
+		return this.index
 	}
 
 	// TODO: remove in favor of mergewithfile
