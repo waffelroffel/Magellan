@@ -18,7 +18,7 @@ function stdenv() {
 
 	for (const [i, pn] of p.entries()) {
 		if (i < 3) continue
-		writeFileSync(join(pn, i + ".txt"), pn)
+		writeFileSync(join(pn, i + ".txt"), pn + i)
 	}
 
 	console.log("Finished initializing standard test environment")
