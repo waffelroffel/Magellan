@@ -12,8 +12,10 @@
 		"test": "ts-node testing/test_run.test.ts"
 	},
 	"dependencies": {
+		"@types/node-fetch": "^2.5.8",
 		"chokidar": "^3.5.1",
 		"hyperswarm": "^2.15.3",
+		"node-fetch": "^2.6.1",
 		"uuid": "^8.3.2"
 	},
 	"devDependencies": {

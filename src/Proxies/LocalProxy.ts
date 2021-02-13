@@ -12,7 +12,6 @@ export default class LocalProxy extends Proxy {
 
 	constructor(vessel: Vessel) {
 		super()
-		this.id = uuid4()
 		this.local = vessel
 	}
 
@@ -23,8 +22,7 @@ export default class LocalProxy extends Proxy {
 	fetch(items: Item[]): (ReadStream | null)[] {
 		return items.map(i => {
 			const rs = this.local.createSC(this.local.root)(i, this.type) // TODO: clean
-			if (!rs) return null
-			if (rs instanceof ReadStream) return rs
+			if (!rs || rs instanceof ReadStream) return rs
 			else throw Error("LocalProxy.fetch: failed to create ReadStream")
 		})
 	}
