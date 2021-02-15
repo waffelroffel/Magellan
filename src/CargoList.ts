@@ -2,11 +2,23 @@ import { existsSync, readFileSync, writeFileSync, readdirSync } from "fs"
 import { join } from "path"
 import { v4 as uuid4 } from "uuid"
 import { FileResolveOption, ItemTypes, ActionTypes, TombTypes } from "./enums"
-import { Item, FileResolveMap, FileRPConfig } from "./interfaces"
+import {
+	Item,
+	FileResolveMap,
+	FileRPConfig,
+	SerializedIndex,
+} from "./interfaces"
 import makemap, { LWWConfig } from "./ResolvePolicies/FileResolvePolicies"
-import { ct } from "./utils"
+import { computehash, ct } from "./utils"
 
 const tempuser = "bob"
+/**
+ * Simple-LWW: all operations are ADD, REM, and CHG. Concurrent file movements will create duplicates across the system
+ *
+ * Advanced-LWW: MOV and REN operations are tracked
+ *
+ * With dups: duplicate files from concurrent ADD or MOV keeps all
+ */
 export default class CargoList {
 	private index: Map<string, Item[]>
 	private indexpath: string
@@ -30,16 +42,12 @@ export default class CargoList {
 		return this.index
 	}
 
-	// TODO: remove in favor of mergewithfile
-	load(): void {
-		if (!existsSync(this.indexpath)) return
-		this.index = new Map(
-			JSON.parse(readFileSync(this.indexpath, { encoding: "utf8" }))
-		)
+	serialize(): string {
+		return JSON.stringify([...this.index])
 	}
 
 	save(): void {
-		writeFileSync(this.indexpath, JSON.stringify([...this.index])) // change to proper json {data:[...this.index]}
+		writeFileSync(this.indexpath, this.serialize()) // change to proper json {data:[...this.index]}
 	}
 
 	show(): void {
@@ -133,8 +141,8 @@ export default class CargoList {
 		if (!existsSync(this.indexpath)) return
 		const oldindex = JSON.parse(
 			readFileSync(this.indexpath, { encoding: "utf8" })
-		) as [string, Item][]
-		oldindex.forEach(([k, v]) => this.apply(v))
+		) as SerializedIndex
+		oldindex.forEach(([k, v]) => v.forEach(i => this.apply(i)))
 		this.save()
 	}
 
@@ -163,9 +171,11 @@ export default class CargoList {
 	}
 
 	private find(item: Item): Item | null {
-		const list = this.index.get(item.path)
-		const it = list?.find(n => n.uuid === item.uuid)
-		return it ?? null
+		return this.index.get(item.path)?.find(n => n.uuid === item.uuid) ?? null
+	}
+
+	findbyhash(path: string, hash: string): Item | null {
+		return this.index.get(path)?.find(n => n.hash === hash) ?? null
 	}
 
 	private push(item: Item): void {

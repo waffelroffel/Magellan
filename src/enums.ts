@@ -6,10 +6,22 @@ export const enum ItemTypes {
 	File,
 }
 
+export const stringToItemType = (value: string): ItemTypes => {
+	switch (value) {
+		case "0":
+			return ItemTypes.Folder
+		case "1":
+			return ItemTypes.File
+		default:
+			throw Error("stringToItemType: invalid type")
+	}
+}
+
 export const enum TombTypes {
 	Moved,
 	Renamed,
 	Deleted,
+	Null,
 }
 
 export const enum ActionTypes {
@@ -18,6 +30,23 @@ export const enum ActionTypes {
 	Move = "MOV",
 	Change = "CHG",
 	Rename = "RNM",
+}
+
+export const stringToActionType = (value: string): ActionTypes => {
+	switch (value) {
+		case ActionTypes.Add:
+			return ActionTypes.Add
+		case ActionTypes.Remove:
+			return ActionTypes.Remove
+		case ActionTypes.Move:
+			return ActionTypes.Move
+		case ActionTypes.Rename:
+			return ActionTypes.Rename
+		case ActionTypes.Change:
+			return ActionTypes.Change
+		default:
+			throw Error("stringToActionType: invalid type")
+	}
 }
 
 // ---------------- NETWORK ----------------

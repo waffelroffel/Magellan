@@ -1,9 +1,10 @@
 import { v4 as uuid4 } from "uuid"
 import { Medium } from "./enums"
-import { NID, Item, StreamCreator } from "./interfaces"
+import { NID, Item, StreamCreator, Streamable } from "./interfaces"
 import LocalProxy from "./Proxies/LocalProxy"
 import Vessel from "./Vessel"
 import Proxy from "./Proxies/Proxy"
+import HTTPProxy from "./Proxies/HTTPProxy"
 
 export default class NetworkInterface {
 	nid: NID
@@ -14,7 +15,7 @@ export default class NetworkInterface {
 	}
 
 	private getIpPort() {
-		return { ip: uuid4(), port: uuid4() }
+		return { ip: "localhost", port: 8000 + Math.floor(Math.random() * 888) }
 	}
 
 	addNode(type: Medium, vessel?: Vessel, nid?: NID): Proxy {
@@ -28,6 +29,8 @@ export default class NetworkInterface {
 		switch (type) {
 			case Medium.local:
 				return vessel ? new LocalProxy(vessel) : null
+			case Medium.http:
+				return nid ? new HTTPProxy(nid.ip, nid.port) : null
 			default:
 				return null
 		}
@@ -37,8 +40,8 @@ export default class NetworkInterface {
 		this.network = this.network.filter(p => p !== proxy)
 	}
 
-	broadcast(item: Item, sc: StreamCreator): void {
-		this.network.forEach(p => p.send(item, sc(item, p.type), this.nid))
+	broadcast(item: Item, rs: Streamable): void {
+		this.network.forEach(p => p.send(item, rs))
 	}
 
 	/*

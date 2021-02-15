@@ -7,17 +7,28 @@ import {
 	rmSync,
 	createWriteStream,
 	createReadStream,
+	writeFileSync,
+	ReadStream,
 } from "fs"
 import { join } from "path"
 import { v4 as uuid4 } from "uuid"
 import { ABCVessel } from "./Proxies/ABCVessel"
 import CargoList from "./CargoList"
-import { ItemTypes, ActionTypes, Medium } from "./enums"
-import { Item, NID, Streamable, StreamCreator } from "./interfaces"
+import { ItemTypes, ActionTypes, Medium, TombTypes } from "./enums"
+import {
+	Item,
+	NID,
+	SerializedIndex,
+	Streamable,
+	StreamCreator,
+} from "./interfaces"
 import NetworkInterface from "./NetworkInterface"
-import { cts, ct } from "./utils"
+import { cts, ct, computehash } from "./utils"
 import Proxy from "./Proxies/Proxy"
 import LocalProxy from "./Proxies/LocalProxy"
+import { createHash } from "crypto"
+import HTTPProxy from "./Proxies/HTTPProxy"
+import VesselServer from "./VesselServer"
 
 /**
  * TODO
@@ -39,6 +50,9 @@ export default class Vessel extends ABCVessel {
 	init = true
 	networkinterface = new NetworkInterface()
 	network: Vessel[] = []
+	server: VesselServer
+
+	localtempfilehashes = new Map<string, string>()
 
 	constructor(user: string, root: string) {
 		super()
@@ -52,6 +66,9 @@ export default class Vessel extends ABCVessel {
 
 		this.watcher = chokidar(root, { persistent: true })
 		this.setupEvents()
+
+		const nid = this.nid()
+		this.server = new VesselServer(this, nid.ip, nid.port)
 	}
 
 	private nid(): NID {
@@ -60,6 +77,7 @@ export default class Vessel extends ABCVessel {
 
 	rejoin(): Vessel {
 		this.index.mergewithlocal()
+		this.server.listen()
 		return this
 	}
 
@@ -115,16 +133,30 @@ export default class Vessel extends ABCVessel {
 			action,
 			this.user
 		)
-		item.uuid = this.index.getLatest(item.path)?.uuid ?? item.uuid // TODO: check
+
+		const latest = this.index.getLatest(item.path)
+		item.uuid = latest?.uuid ?? item.uuid // TODO: need to apply the latest item to preserve uuid and hash
+		item.hash = latest?.hash ?? item.hash // TODO: check
+
+		if (type === ItemTypes.File && action === ActionTypes.Remove) {
+			const newpath = this.localtempfilehashes.get(item.hash ?? "") ?? "" //TODO
+			item.tomb = { type: TombTypes.Moved, movedTo: newpath }
+			this.localtempfilehashes.delete(item.hash ?? "")
+		} else if (
+			type === ItemTypes.File &&
+			(action === ActionTypes.Add || action === ActionTypes.Change)
+		)
+			item.hash = computehash(path)
 
 		//this.log.push(item, this.user)
 		const applied = this.index.apply(item)
 		this.logger(this.user, action, path, applied)
 		if (!applied || this.init) return
 
+		this.localtempfilehashes.set(item.hash ?? "", item.path) // TODO
 		this.index.save()
 
-		this.networkinterface.broadcast(item, this.createSC(this.root))
+		this.networkinterface.broadcast(item, this.createRS(item))
 	}
 
 	applyIncoming(item: Item, rs?: Streamable): void {
@@ -160,13 +192,15 @@ export default class Vessel extends ABCVessel {
 	}
 
 	private updateCargo(index: CargoList, proxy: Proxy): void {
-		this.logger(this.user, "DWN")
+		if (!(proxy instanceof LocalProxy))
+			throw Error("Vessel.updateCargo: not LocalProxy")
+		this.logger(this.user, "LOCAL", "DWN")
 
 		const newitems: Item[] = []
 		for (const lst of index)
 			lst.forEach(item => (this.index.apply(item) ? newitems.push(item) : null))
 
-		proxy.fetch(newitems, this.nid()).forEach((rs, i) => {
+		proxy.fetch(newitems).forEach((rs, i) => {
 			const item = newitems[i]
 			const full = join(this.root, item.path)
 			if (item.type === ItemTypes.Folder) this.applyFolderIO(item, full)
@@ -176,20 +210,13 @@ export default class Vessel extends ABCVessel {
 		this.index.save()
 	}
 
-	createSC(root: string): StreamCreator {
-		// TODO clean
-		const sc: StreamCreator = (item, type) => {
-			switch (type) {
-				case Medium.local:
-					return item.type === ItemTypes.File &&
-						item.lastAction !== ActionTypes.Remove
-						? createReadStream(join(root, item.path))
-						: null
-				default:
-					return null
-			}
-		}
-		return sc
+	createRS(item: Item): Streamable {
+		if (
+			item.type === ItemTypes.Folder ||
+			item.lastAction === ActionTypes.Remove
+		)
+			return null
+		return createReadStream(join(this.root, item.path))
 	}
 
 	addLocalVessel(vessel: Vessel): void {
@@ -197,4 +224,39 @@ export default class Vessel extends ABCVessel {
 		if (proxy instanceof LocalProxy) this.updateCargo(proxy.fetchIndex(), proxy)
 		else throw Error("Vessel.addLocalVessel: instance not LocalProxy")
 	}
+
+	addRemoteVessel(nid: NID): void {
+		const proxy = this.networkinterface.addNode(Medium.http, undefined, nid)
+		if (!(proxy instanceof HTTPProxy))
+			throw Error("Vessel.addRemoteVessel: instance not HTTPProxy")
+		proxy.fetchIndex().then(value => this.updateCargoWithString(value, proxy))
+	}
+
+	private updateCargoWithString(data: SerializedIndex, proxy: Proxy): void {
+		if (!(proxy instanceof HTTPProxy))
+			throw Error("Vessel.updateCargo: not HTTPProxy")
+		this.logger(this.user, "REMOTE", "DWN")
+
+		const newitems: Item[] = []
+
+		const indexarr = data //JSON.parse(data) as SerializedIndex
+		indexarr.forEach(([k, v]) =>
+			v.forEach(item => (this.index.apply(item) ? newitems.push(item) : null))
+		)
+
+		proxy.fetch(newitems).forEach((pr, i) => {
+			const item = newitems[i]
+			const full = join(this.root, item.path)
+			if (item.type === ItemTypes.Folder) this.applyFolderIO(item, full)
+			else if (item.type === ItemTypes.File)
+				pr.then(rs => {
+					this.applyFileIO(item, full, rs)
+				})
+		})
+
+		this.index.save()
+	}
 }
+
+if (require.main === module)
+	new Vessel("frank", join("testroot", "dave", "root")).rejoin()

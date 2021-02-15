@@ -21,7 +21,7 @@ export default class LocalProxy extends Proxy {
 
 	fetch(items: Item[]): (ReadStream | null)[] {
 		return items.map(i => {
-			const rs = this.local.createSC(this.local.root)(i, this.type) // TODO: clean
+			const rs = this.local.createRS(i)
 			if (!rs || rs instanceof ReadStream) return rs
 			else throw Error("LocalProxy.fetch: failed to create ReadStream")
 		})

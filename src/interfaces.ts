@@ -7,6 +7,8 @@ import {
 	FileResolveOption,
 	Medium,
 } from "./enums"
+import { Response } from "node-fetch"
+import { IncomingMessage } from "http"
 
 // ---------------- CARGOLIST ----------------
 export interface Tomb {
@@ -21,11 +23,14 @@ export interface Item {
 	lastModified: number
 	lastAction: ActionTypes // TODO: referrence to LOG/ LogItem id
 	lastActionBy: string
+	hash?: string // Files only
 	onDevice?: boolean
 	tomb?: Tomb
 	creator?: string //TODO
 	reachable?: boolean //TODO
 }
+
+export type SerializedIndex = [string, Item[]][]
 
 // ---------------- VESSEL ----------------
 export type StreamCreator = (items: Item, type: Medium) => Streamable
@@ -44,10 +49,15 @@ export interface LogItem {
 // ---------------- NETWORK ----------------
 export interface NID {
 	ip: string
-	port: string
+	port: number
 }
 
-export type Streamable = ReadStream | Socket | null // TODO: workaround null and add HTTPS
+export type Streamable =
+	| ReadStream
+	| Socket
+	| null
+	| IncomingMessage
+	| NodeJS.ReadableStream // TODO: workaround null
 
 // ---------------- RESOLVES ----------------
 export type ResolveLogic = (item1: Item, item2: Item) => [Item, number]

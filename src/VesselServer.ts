@@ -1,16 +1,14 @@
-import { createReadStream, createWriteStream, ReadStream } from "fs"
 import {
 	createServer,
 	IncomingMessage,
 	RequestListener,
 	Server,
-	ServerOptions,
 	ServerResponse,
 } from "http"
-import { decode } from "querystring"
-import { parse, URL } from "url"
-import { ActionTypes, ItemTypes } from "./enums"
+import { URL } from "url"
+import { Medium, stringToActionType, stringToItemType } from "./enums"
 import { Item } from "./interfaces"
+import Vessel from "./Vessel"
 
 const enum DEFAULT_SETTINGS {
 	HOST = "localhost",
@@ -23,66 +21,102 @@ export default class VesselServer {
 	base: string
 	server: Server
 	protocol = "http://"
+	vessel: Vessel
 
-	constructor(host?: string, port?: number) {
+	constructor(vessel: Vessel, host?: string, port?: number) {
 		this.host = host ?? DEFAULT_SETTINGS.HOST
 		this.port = port ?? DEFAULT_SETTINGS.PORT
 		this.base = `${this.protocol}${this.host}:${this.port}`
-		console.log("contructor", this.base)
-		this.server = createServer(this.makeRL(this.base))
+		this.server = createServer(this.makeReqLis(this.base))
+		this.vessel = vessel
 	}
 
 	listen() {
 		this.server.listen(this.port, this.host, () => {
-			console.log(this.server.address())
+			console.log(this.vessel.user, this.server.address())
 		})
 	}
 
-	private makeRL(base: string): RequestListener {
+	private makeReqLis(base: string): RequestListener {
 		return (req, res) => {
 			if (!req.url) throw Error("VesselServer.requestListener: url undefined")
-			const params = new URL(req.url, base).searchParams
-
-			// TODO: clean later
-			const path = params.get("path")
-			const uuid = params.get("uuid")
-			const type = params.get("type")
-			const lastModified = params.get("lastModified")
-			const lastAction = params.get("lastAction")
-			const lastActionBy = params.get("lastActionBy")
-
-			if (!path) throw Error("VesselServer.checkParams: illegal params")
-			if (!uuid) throw Error("VesselServer.checkParams: illegal params")
-			if (!type) throw Error("VesselServer.checkParams: illegal params")
-			if (!lastModified) throw Error("VesselServer.checkParams: illegal params")
-			if (!lastAction) throw Error("VesselServer.checkParams: illegal params")
-			if (!lastActionBy) throw Error("VesselServer.checkParams: illegal params")
-
-			const item: Item = {
-				path,
-				uuid,
-				type: type === "1" ? ItemTypes.File : ItemTypes.Folder,
-				lastModified: parseInt(lastModified),
-				lastAction: lastAction === "1" ? ActionTypes.Add : ActionTypes.Remove, // TODO
-				lastActionBy,
-			}
-
-			console.log(item)
-
-			req.pipe(process.stdout)
-			res.end("OK")
+			if (req.method === "POST") this.reqPOST(req, req.url, base, res)
+			else if (req.method === "GET") this.reqGET(req, req.url, base, res)
+			else throw Error("VesselServer.requestListener: method not POST nor GET")
 		}
 	}
+	private reqGET(
+		req: IncomingMessage,
+		url: string,
+		base: string,
+		res: ServerResponse
+	): void {
+		if (new URL(url, base).searchParams.get("get") === "index")
+			return res.end(this.vessel.index.serialize())
 
-	private checkParams(params: URLSearchParams): boolean {
-		if (!params.get("path")) return false
-		if (!params.get("uuid")) return false
-		if (!params.get("type")) return false
-		if (!params.get("lastModified")) return false
-		if (!params.get("lastAction")) return false
-		if (!params.get("lastActionBy")) return false
-		return true
+		const params = new URL(url, base).searchParams
+		// TODO: check for uuid and hash
+		// TODO: clean later
+		const path = params.get("path")
+		const uuid = params.get("uuid")
+		const type = params.get("type")
+		const lastModified = params.get("lastModified")
+		const lastAction = params.get("lastAction")
+		const lastActionBy = params.get("lastActionBy")
+		if (!path) throw Error("VesselServer.reqPOST: illegal params")
+		if (!uuid) throw Error("VesselServer.reqPOST: illegal params")
+		if (!type) throw Error("VesselServer.reqPOST: illegal params")
+		if (!lastModified) throw Error("VesselServer.reqPOST: illegal params")
+		if (!lastAction) throw Error("VesselServer.reqPOST: illegal params")
+		if (!lastActionBy) throw Error("VesselServer.reqPOST: illegal params")
+
+		const item: Item = {
+			path,
+			uuid,
+			type: stringToItemType(type),
+			lastModified: parseInt(lastModified),
+			lastAction: stringToActionType(lastAction),
+			lastActionBy,
+		}
+
+		this.vessel.createRS(item)?.pipe(res) // TODO: add logic if null
+
+		//throw Error("VesselServer.reqGET: invalid get parameter")
+	}
+
+	private reqPOST(
+		req: IncomingMessage,
+		url: string,
+		base: string,
+		res: ServerResponse
+	): void {
+		const params = new URL(url, base).searchParams
+		// TODO: clean later
+		const path = params.get("path")
+		const uuid = params.get("uuid")
+		const type = params.get("type")
+		const lastModified = params.get("lastModified")
+		const lastAction = params.get("lastAction")
+		const lastActionBy = params.get("lastActionBy")
+		//const hash = params.get("lastActionBy") // TODO: add hash and tomb
+		if (!path) throw Error("VesselServer.reqPOST: illegal params")
+		if (!uuid) throw Error("VesselServer.reqPOST: illegal params")
+		if (!type) throw Error("VesselServer.reqPOST: illegal params")
+		if (!lastModified) throw Error("VesselServer.reqPOST: illegal params")
+		if (!lastAction) throw Error("VesselServer.reqPOST: illegal params")
+		if (!lastActionBy) throw Error("VesselServer.reqPOST: illegal params")
+
+		const item: Item = {
+			path,
+			uuid,
+			type: stringToItemType(type),
+			lastModified: parseInt(lastModified),
+			lastAction: stringToActionType(lastAction),
+			lastActionBy,
+		}
+
+		this.vessel.applyIncoming(item, req)
 	}
 }
 
-if (require.main === module) new VesselServer().listen()
+//if (require.main === module) new VesselServer().listen()

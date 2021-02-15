@@ -12,12 +12,14 @@ setTimeout(() => {
 }, 1000)
 
 setTimeout(() => {
-	dave.addLocalVessel(evan)
-	evan.addLocalVessel(dave)
+	//dave.addLocalVessel(evan)
+	//evan.addLocalVessel(dave)
+	dave.addRemoteVessel(evan.networkinterface.nid)
+	evan.addRemoteVessel(dave.networkinterface.nid)
 
 	setTimeout(() => {
 		console.log("Post index equal: ", isDeepEqual(dave.index, evan.index))
-	}, 1000)
+	}, 5000)
 }, 2000)
 
 function isDeepEqual(c1: CargoList, c2: CargoList): boolean {

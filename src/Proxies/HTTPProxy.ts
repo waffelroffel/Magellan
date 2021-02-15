@@ -1,57 +1,57 @@
 import { createReadStream, ReadStream } from "fs"
 import { Socket } from "net"
-import fetch from "node-fetch"
+import fetch, { Response } from "node-fetch"
 import CargoList from "../CargoList"
 import { ActionTypes, ItemTypes, Medium } from "../enums"
-import { NID, Item, Streamable } from "../interfaces"
+import { NID, Item, Streamable, SerializedIndex } from "../interfaces"
 import Proxy from "./Proxy"
+
+/**
+ * POST: http://host:port/?...{item=item}
+ * GET: http://host:port/?get=index
+ * GET: http://host:port/?...{item=item}
+ */
 export default class HTTPProxy extends Proxy {
 	type = Medium.http
 	protocol = "http://"
 	host: string
 	port: number
+	base: string
+	urlgetindex: string
 
 	constructor(host: string, port: number) {
 		super()
 		this.host = host
 		this.port = port
+		this.base = `${this.protocol}${host}:${port}`
+		this.urlgetindex = `${this.base}?get=index`
 	}
 
-	send(item: Item, rs?: Streamable): void {
-		fetch(this.makeURL(item), {
+	send(item: Item, rs?: Streamable) {
+		fetch(this.makePOST(item), {
 			method: "POST",
 			body: rs ?? undefined,
-		}).then(res => res.text().then(txt => console.log(txt)))
+		})
 	}
 
-	private makeURL(item: Item): string {
-		const base = `${this.protocol}${this.host}:${this.port}`
+	private makePOST(item: Item): string {
 		const params = Object.entries(item)
 			.map(([k, v]) => `${k}=${v}`)
 			.join("&")
-		return `${base}?${params}`
+		return `${this.base}?${params}`
 	}
 
-	fetch(items: Item[], src: NID): Streamable[] {
-		throw Error("HTTPProxy.fetch: not implemented")
+	fetch(items: Item[]): Promise<NodeJS.ReadableStream>[] {
+		return items.map(item =>
+			fetch(this.makePOST(item), {
+				method: "GET",
+			}).then(res => res.body)
+		)
 	}
 
-	fetchIndex(src: NID): ReadStream | Socket | CargoList | null {
-		throw Error("HTTPProxy.fetchIndex: not implemented")
+	fetchIndex(): Promise<SerializedIndex> {
+		return fetch(this.urlgetindex, {
+			method: "GET",
+		}).then(res => res.json())
 	}
-}
-if (require.main === module) {
-	const item = CargoList.newItem(
-		"path123",
-		"uuid123",
-		ItemTypes.File,
-		123,
-		ActionTypes.Add,
-		"user123"
-	)
-
-	new HTTPProxy("localhost", 8000).send(
-		item,
-		createReadStream("testroot/dave/root/4.txt")
-	)
 }
