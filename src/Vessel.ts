@@ -26,7 +26,6 @@ import NetworkInterface from "./NetworkInterface"
 import { cts, ct, computehash } from "./utils"
 import Proxy from "./Proxies/Proxy"
 import LocalProxy from "./Proxies/LocalProxy"
-import { createHash } from "crypto"
 import HTTPProxy from "./Proxies/HTTPProxy"
 import VesselServer from "./VesselServer"
 
@@ -35,6 +34,9 @@ import VesselServer from "./VesselServer"
  * - since mem footprint is not really an issue, at least for small amount of files, 4000 files is about 0.5 MB
  * 	 the crdt can be treated as an state-based crdt during network init and rejoin
  *   and as an operation-based when online (need log for transmission gurantee) (or even just send whole state in updates)
+ * - matching file hashes needs to be handled differently
+ * - folder logic in CargoList is a mess
+ * - tombs are not carried over http -> index assertion fails
  *
  */
 export default class Vessel extends ABCVessel {
@@ -151,7 +153,7 @@ export default class Vessel extends ABCVessel {
 		//this.log.push(item, this.user)
 		const applied = this.index.apply(item)
 		this.logger(this.user, action, path, applied)
-		if (!applied || this.init) return
+		if (/*!applied ||*/ this.init) return
 
 		this.localtempfilehashes.set(item.hash ?? "", item.path) // TODO
 		this.index.save()
@@ -191,70 +193,42 @@ export default class Vessel extends ABCVessel {
 		}
 	}
 
-	private updateCargo(index: CargoList, proxy: Proxy): void {
-		if (!(proxy instanceof LocalProxy))
-			throw Error("Vessel.updateCargo: not LocalProxy")
-		this.logger(this.user, "LOCAL", "DWN")
-
-		const newitems: Item[] = []
-		for (const lst of index)
-			lst.forEach(item => (this.index.apply(item) ? newitems.push(item) : null))
-
-		proxy.fetch(newitems).forEach((rs, i) => {
-			const item = newitems[i]
-			const full = join(this.root, item.path)
-			if (item.type === ItemTypes.Folder) this.applyFolderIO(item, full)
-			else if (item.type === ItemTypes.File) this.applyFileIO(item, full, rs)
-		})
-
-		this.index.save()
-	}
-
 	createRS(item: Item): Streamable {
-		if (
-			item.type === ItemTypes.Folder ||
+		this.logger(this.user, "REMOTE", "UP")
+		return item.type === ItemTypes.Folder ||
 			item.lastAction === ActionTypes.Remove
+			? null
+			: createReadStream(join(this.root, item.path))
+	}
+
+	addVessel(type: Medium, data: { vessel?: Vessel; nid?: NID }): void {
+		const proxy = this.networkinterface.addNode(type, data)
+		if (!(proxy instanceof LocalProxy || proxy instanceof HTTPProxy))
+			throw Error(`Vessel.addVessel: ${proxy.constructor.name} not implemented`)
+
+		Promise.resolve(proxy.fetchIndex()).then(value =>
+			this.updateCargo(value, proxy)
 		)
-			return null
-		return createReadStream(join(this.root, item.path))
 	}
 
-	addLocalVessel(vessel: Vessel): void {
-		const proxy = this.networkinterface.addNode(Medium.local, vessel)
-		if (proxy instanceof LocalProxy) this.updateCargo(proxy.fetchIndex(), proxy)
-		else throw Error("Vessel.addLocalVessel: instance not LocalProxy")
-	}
-
-	addRemoteVessel(nid: NID): void {
-		const proxy = this.networkinterface.addNode(Medium.http, undefined, nid)
-		if (!(proxy instanceof HTTPProxy))
-			throw Error("Vessel.addRemoteVessel: instance not HTTPProxy")
-		proxy.fetchIndex().then(value => this.updateCargoWithString(value, proxy))
-	}
-
-	private updateCargoWithString(data: SerializedIndex, proxy: Proxy): void {
-		if (!(proxy instanceof HTTPProxy))
-			throw Error("Vessel.updateCargo: not HTTPProxy")
+	private updateCargo(
+		data: SerializedIndex | Promise<SerializedIndex>,
+		proxy: Proxy
+	): void {
 		this.logger(this.user, "REMOTE", "DWN")
 
-		const newitems: Item[] = []
+		Promise.resolve(data).then(arr => {
+			const items = arr.flatMap(kv => kv[1]).filter(i => this.index.apply(i))
 
-		const indexarr = data //JSON.parse(data) as SerializedIndex
-		indexarr.forEach(([k, v]) =>
-			v.forEach(item => (this.index.apply(item) ? newitems.push(item) : null))
-		)
-
-		proxy.fetch(newitems).forEach((pr, i) => {
-			const item = newitems[i]
-			const full = join(this.root, item.path)
-			if (item.type === ItemTypes.Folder) this.applyFolderIO(item, full)
-			else if (item.type === ItemTypes.File)
-				pr.then(rs => {
-					this.applyFileIO(item, full, rs)
-				})
+			proxy.fetch(items).forEach((pr, i) => {
+				const item = items[i]
+				const full = join(this.root, item.path)
+				if (item.type === ItemTypes.Folder) this.applyFolderIO(item, full)
+				else if (item.type === ItemTypes.File)
+					Promise.resolve(pr).then(rs => this.applyFileIO(item, full, rs))
+			})
+			this.index.save()
 		})
-
-		this.index.save()
 	}
 }
 

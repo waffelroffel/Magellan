@@ -1,6 +1,7 @@
 import { join } from "path"
 import { isDeepStrictEqual } from "util"
 import CargoList from "../src/CargoList"
+import { Medium } from "../src/enums"
 import { Item } from "../src/interfaces"
 import Vessel from "../src/Vessel"
 
@@ -12,10 +13,10 @@ setTimeout(() => {
 }, 1000)
 
 setTimeout(() => {
-	//dave.addLocalVessel(evan)
-	//evan.addLocalVessel(dave)
-	dave.addRemoteVessel(evan.networkinterface.nid)
-	evan.addRemoteVessel(dave.networkinterface.nid)
+	//dave.addVessel(Medium.local, { vessel: evan })
+	//evan.addVessel(Medium.local, { vessel: dave })
+	dave.addVessel(Medium.http, { nid: evan.networkinterface.nid })
+	evan.addVessel(Medium.http, { nid: dave.networkinterface.nid })
 
 	setTimeout(() => {
 		console.log("Post index equal: ", isDeepEqual(dave.index, evan.index))

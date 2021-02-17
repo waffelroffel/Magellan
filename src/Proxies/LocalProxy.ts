@@ -2,7 +2,7 @@ import { ReadStream } from "fs"
 import { v4 as uuid4 } from "uuid"
 import CargoList from "../CargoList"
 import { Medium } from "../enums"
-import { Item } from "../interfaces"
+import { Item, SerializedIndex } from "../interfaces"
 import Vessel from "../Vessel"
 import Proxy from "./Proxy"
 
@@ -27,7 +27,7 @@ export default class LocalProxy extends Proxy {
 		})
 	}
 
-	fetchIndex(): CargoList {
-		return this.local.index
+	fetchIndex(): SerializedIndex {
+		return this.local.index.asArray()
 	}
 }

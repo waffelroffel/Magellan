@@ -18,19 +18,22 @@ export default class NetworkInterface {
 		return { ip: "localhost", port: 8000 + Math.floor(Math.random() * 888) }
 	}
 
-	addNode(type: Medium, vessel?: Vessel, nid?: NID): Proxy {
-		const proxy = this.createProxy(type, vessel, nid)
+	addNode(type: Medium, data: { vessel?: Vessel; nid?: NID }): Proxy {
+		const proxy = this.createProxy(type, data)
 		if (!proxy) throw Error("NetworkInterface.addNode: null from createProxy")
 		this.network.push(proxy)
 		return proxy
 	}
 
-	private createProxy(type: Medium, vessel?: Vessel, nid?: NID): Proxy | null {
+	private createProxy(
+		type: Medium,
+		data: { vessel?: Vessel; nid?: NID }
+	): Proxy | null {
 		switch (type) {
 			case Medium.local:
-				return vessel ? new LocalProxy(vessel) : null
+				return data.vessel ? new LocalProxy(data.vessel) : null
 			case Medium.http:
-				return nid ? new HTTPProxy(nid.ip, nid.port) : null
+				return data.nid ? new HTTPProxy(data.nid.ip, data.nid.port) : null
 			default:
 				return null
 		}

@@ -42,6 +42,10 @@ export default class CargoList {
 		return this.index
 	}
 
+	asArray(): SerializedIndex {
+		return [...this.index]
+	}
+
 	serialize(): string {
 		return JSON.stringify([...this.index])
 	}
@@ -115,10 +119,6 @@ export default class CargoList {
 		}
 		if (action === ActionTypes.Remove) item.tomb = { type: TombTypes.Deleted }
 		return item
-	}
-
-	[Symbol.iterator](): IterableIterator<Item[]> {
-		return this.index.values()
 	}
 
 	get(k: string): Item[] | undefined {
@@ -238,17 +238,17 @@ export default class CargoList {
 		if (olditem.lastAction === ActionTypes.Add) {
 			const [item, n] = this.rsfile.addadd(olditem, newitem)
 			this.update(item, this.rsfilep.get("addrem"))
-			return n === 1
+			return pushed || n === 1
 		}
 		if (olditem.lastAction === ActionTypes.Remove) {
 			const [item, n] = this.rsfile.addrem(olditem, newitem)
 			this.update(item, this.rsfilep.get("remrem"))
-			return n === 1
+			return pushed || n === 1
 		}
 		if (olditem.lastAction === ActionTypes.Change) {
 			const [item, n] = this.rsfile.addchg(olditem, newitem)
 			this.update(item, this.rsfilep.get("remchg"))
-			return n === 1
+			return pushed || n === 1
 		}
 		return false
 	}
@@ -266,28 +266,30 @@ export default class CargoList {
 		if (olditem.lastAction === ActionTypes.Add) {
 			const [item, n] = this.rsfile.addadd(olditem, newitem)
 			this.update(item, this.rsfilep.get("addchg"))
-			return n === 1
+			return pushed || n === 1
 		}
 		if (olditem.lastAction === ActionTypes.Remove) {
 			const [item, n] = this.rsfile.addrem(olditem, newitem)
 			this.update(item, this.rsfilep.get("remchg"))
-			return n === 1
+			return pushed || n === 1
 		}
 		if (olditem.lastAction === ActionTypes.Change) {
 			const [item, n] = this.rsfile.addchg(olditem, newitem)
 			this.update(item, this.rsfilep.get("chgchg"))
-			return n === 1
+			return pushed || n === 1
 		}
 		return false
 	}
 
 	private applyADDFolder(newitem: Item): boolean {
 		if (newitem.path === this.indexpath) return false
-		const olditem = this.getLatest(newitem.path) // TODO get back to it later
+		let olditem = this.getLatest(newitem.path) // TODO get back to it later
+		let pushed = false
 
 		if (!olditem) {
 			this.push(newitem)
-			return true
+			olditem = newitem
+			pushed = true
 		}
 		if (olditem.lastAction === ActionTypes.Add) {
 			// TODO: change to new entry instead of overwriting old
@@ -296,7 +298,7 @@ export default class CargoList {
 					? olditem.lastModified > newitem.lastModified
 					: olditem.lastActionBy > newitem.lastActionBy
 			if (cond) Object.assign(olditem, newitem)
-			return false
+			return pushed || false // TODO: clean
 		}
 		if (olditem.lastAction === ActionTypes.Remove) {
 			const cond =
@@ -304,29 +306,31 @@ export default class CargoList {
 					? olditem.lastModified > newitem.lastModified
 					: olditem.lastActionBy > newitem.lastActionBy
 			if (cond) Object.assign(olditem, newitem)
-			return cond
+			return pushed || cond
 		}
-		if (olditem.lastAction === ActionTypes.Change) {
+		if (olditem.lastAction === ActionTypes.Change)
 			throw Error("CargoList.applyADDFolder: olditem.lastAction === CHG")
-		}
 		return false
 	}
 
 	private applyREMOVEFolder(newitem: Item): boolean {
 		if (newitem.path === this.indexpath) return false
-		const olditem = this.find(newitem)
+		let olditem = this.find(newitem)
+		let pushed = false
 
 		if (!olditem) {
 			this.push(newitem)
-			return true
+			olditem = newitem
+			pushed = true
 		}
 		if (olditem.lastAction === ActionTypes.Add) {
-			const cond =
+			let cond =
 				olditem.lastModified !== newitem.lastModified
 					? olditem.lastModified > newitem.lastModified
 					: olditem.lastActionBy > newitem.lastActionBy
+			if (olditem === newitem) cond = true // TODO: this is a mess
 			if (cond) Object.assign(olditem, newitem)
-			return cond
+			return pushed || cond
 		}
 		if (olditem.lastAction === ActionTypes.Remove) {
 			const cond =
@@ -334,11 +338,10 @@ export default class CargoList {
 					? olditem.lastModified > newitem.lastModified
 					: olditem.lastActionBy > newitem.lastActionBy
 			if (cond) Object.assign(olditem, newitem)
-			return false
+			return pushed || false // TODO: clean
 		}
-		if (olditem.lastAction === ActionTypes.Change) {
+		if (olditem.lastAction === ActionTypes.Change)
 			throw Error("CargoList.applyREMOVEFolder: olditem.lastAction === CHG")
-		}
 		return false
 	}
 }
