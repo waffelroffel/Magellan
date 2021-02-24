@@ -1,7 +1,7 @@
 import { mkdirSync, rmdirSync, writeFileSync } from "fs"
 import { join } from "path"
 
-function stdenv() {
+export default function stdenv() {
 	rmdirSync("testroot", { recursive: true })
 
 	const p0 = "testroot"

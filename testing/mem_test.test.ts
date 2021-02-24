@@ -6,7 +6,7 @@ setTimeout(() => {
 	console.log(roughSizeOfObject(frank), "bytes")
 }, 5000)
 
-// Turn off script is tsconfig before executing test
+// Turn off strict in tsconfig before executing test
 // TODO: find size of one Item object and calculate the # to exceed 16 GB
 // https://stackoverflow.com/questions/1248302/how-to-get-the-size-of-a-javascript-object
 function roughSizeOfObject(object) {
