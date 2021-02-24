@@ -15,7 +15,7 @@ export default class NetworkInterface {
 	}
 
 	private getIpPort() {
-		return { ip: "localhost", port: 8000 + Math.floor(Math.random() * 888) }
+		return { host: "localhost", port: 8000 + Math.floor(Math.random() * 888) }
 	}
 
 	addNode(type: Medium, data: { vessel?: Vessel; nid?: NID }): Proxy {
@@ -33,7 +33,7 @@ export default class NetworkInterface {
 			case Medium.local:
 				return data.vessel ? new LocalProxy(data.vessel) : null
 			case Medium.http:
-				return data.nid ? new HTTPProxy(data.nid.ip, data.nid.port) : null
+				return data.nid ? new HTTPProxy(data.nid.host, data.nid.port) : null
 			default:
 				return null
 		}

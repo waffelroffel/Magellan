@@ -21,7 +21,19 @@ export const enum TombTypes {
 	Moved,
 	Renamed,
 	Deleted,
-	Null,
+}
+
+export const stringToTombTypes = (value: string): TombTypes => {
+	switch (value) {
+		case "0":
+			return TombTypes.Moved
+		case "1":
+			return TombTypes.Renamed
+		case "2":
+			return TombTypes.Deleted
+		default:
+			throw Error("stringToTombTypes: invalid type")
+	}
 }
 
 export const enum ActionTypes {

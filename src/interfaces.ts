@@ -23,6 +23,7 @@ export interface Item {
 	lastModified: number
 	lastAction: ActionTypes // TODO: referrence to LOG/ LogItem id
 	lastActionBy: string
+	actionId: string
 	hash?: string // Files only
 	onDevice?: boolean
 	tomb?: Tomb
@@ -30,7 +31,7 @@ export interface Item {
 	reachable?: boolean //TODO
 }
 
-export type SerializedIndex = [string, Item[]][]
+export type IndexArray = [string, Item[]][]
 
 // ---------------- VESSEL ----------------
 export type StreamCreator = (items: Item, type: Medium) => Streamable
@@ -48,7 +49,7 @@ export interface LogItem {
 
 // ---------------- NETWORK ----------------
 export interface NID {
-	ip: string
+	host: string
 	port: number
 }
 

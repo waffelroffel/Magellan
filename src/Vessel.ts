@@ -15,13 +15,7 @@ import { v4 as uuid4 } from "uuid"
 import { ABCVessel } from "./Proxies/ABCVessel"
 import CargoList from "./CargoList"
 import { ItemTypes, ActionTypes, Medium, TombTypes } from "./enums"
-import {
-	Item,
-	NID,
-	SerializedIndex,
-	Streamable,
-	StreamCreator,
-} from "./interfaces"
+import { Item, NID, IndexArray, Streamable } from "./interfaces"
 import NetworkInterface from "./NetworkInterface"
 import { cts, ct, computehash } from "./utils"
 import Proxy from "./Proxies/Proxy"
@@ -36,7 +30,6 @@ import VesselServer from "./VesselServer"
  *   and as an operation-based when online (need log for transmission gurantee) (or even just send whole state in updates)
  * - matching file hashes needs to be handled differently
  * - folder logic in CargoList is a mess
- * - tombs are not carried over http -> index assertion fails
  *
  */
 export default class Vessel extends ABCVessel {
@@ -51,7 +44,6 @@ export default class Vessel extends ABCVessel {
 	//log = new Log()
 	init = true
 	networkinterface = new NetworkInterface()
-	network: Vessel[] = []
 	server: VesselServer
 
 	localtempfilehashes = new Map<string, string>()
@@ -69,11 +61,11 @@ export default class Vessel extends ABCVessel {
 		this.watcher = chokidar(root, { persistent: true })
 		this.setupEvents()
 
-		const nid = this.nid()
-		this.server = new VesselServer(this, nid.ip, nid.port)
+		const { host, port } = this.networkinterface.nid
+		this.server = new VesselServer(this, host, port)
 	}
 
-	private nid(): NID {
+	nid(): NID {
 		return this.networkinterface.nid
 	}
 
@@ -110,12 +102,14 @@ export default class Vessel extends ABCVessel {
 			.on("addDir", (path: string) =>
 				this.applyLocal(path, ItemTypes.Folder, ActionTypes.Add)
 			)
-			.on("unlinkDir", (path: string) =>
+			.on("unlinkDir", (path: string) => {
+				if (path.includes("Magellan")) return
+				// TODO: temp solution to remove second trigger on fill path
 				this.applyLocal(path, ItemTypes.Folder, ActionTypes.Remove)
-			)
-			.on("error", (error: any) => this.logger("error", error))
+			}) // TODO: when deleting folder with files, full path is returned, error when deleting folder with folders due to order of deletion parent->child
+			// A second event with the fullpath is triggered?
+			.on("error", this.logger) // TODO: when empty folder gets deleted throws error
 			.on("ready", () => {
-				// ready: gets called AFTER all initial files are added
 				this.init = false
 				this.index.save()
 				this.logger(this.user, "PLVS VLTRA!")
@@ -157,13 +151,12 @@ export default class Vessel extends ABCVessel {
 
 		this.localtempfilehashes.set(item.hash ?? "", item.path) // TODO
 		this.index.save()
-
 		this.networkinterface.broadcast(item, this.createRS(item))
 	}
 
 	applyIncoming(item: Item, rs?: Streamable): void {
 		const applied = this.index.apply(item)
-		this.logger(this.user, "REMOTE", item.lastAction, item.path)
+		this.logger(this.user, "REMOTE", item.lastAction, item.path, applied)
 		if (!applied) return
 
 		const full = join(this.root, item.path)
@@ -194,28 +187,47 @@ export default class Vessel extends ABCVessel {
 	}
 
 	createRS(item: Item): Streamable {
-		this.logger(this.user, "REMOTE", "UP")
-		return item.type === ItemTypes.Folder ||
+		if (
+			item.type === ItemTypes.Folder ||
 			item.lastAction === ActionTypes.Remove
-			? null
-			: createReadStream(join(this.root, item.path))
+		)
+			return null
+		this.logger(this.user, "createRS", item.path)
+		return createReadStream(join(this.root, item.path))
 	}
+
+	/*
+	getProxies(): string {
+		const proxies = this.networkinterface.network
+			.filter(p => p instanceof HTTPProxy)
+			.map(
+				p => p instanceof HTTPProxy && [p.id, { host: p.host, port: p.port }]
+			)
+		return JSON.stringify(proxies)
+	}*/
 
 	addVessel(type: Medium, data: { vessel?: Vessel; nid?: NID }): void {
 		const proxy = this.networkinterface.addNode(type, data)
 		if (!(proxy instanceof LocalProxy || proxy instanceof HTTPProxy))
 			throw Error(`Vessel.addVessel: ${proxy.constructor.name} not implemented`)
 
-		Promise.resolve(proxy.fetchIndex()).then(value =>
-			this.updateCargo(value, proxy)
+		Promise.resolve(proxy.fetchIndex()).then(index =>
+			this.updateCargo(index, proxy)
 		)
+
+		/*
+		Promise.resolve(proxy.getProxies()).then(proxies => {
+			console.log(proxies)
+			// TODO:
+		})
+		*/
 	}
 
 	private updateCargo(
-		data: SerializedIndex | Promise<SerializedIndex>,
+		data: IndexArray | Promise<IndexArray>,
 		proxy: Proxy
 	): void {
-		this.logger(this.user, "REMOTE", "DWN")
+		this.logger(this.user, "updateCargo")
 
 		Promise.resolve(data).then(arr => {
 			const items = arr.flatMap(kv => kv[1]).filter(i => this.index.apply(i))

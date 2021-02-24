@@ -6,8 +6,13 @@ import {
 	ServerResponse,
 } from "http"
 import { URL } from "url"
-import { Medium, stringToActionType, stringToItemType } from "./enums"
-import { Item } from "./interfaces"
+import {
+	Medium,
+	stringToActionType,
+	stringToItemType,
+	stringToTombTypes,
+} from "./enums"
+import { Item, NID } from "./interfaces"
 import Vessel from "./Vessel"
 
 const enum DEFAULT_SETTINGS {
@@ -51,10 +56,11 @@ export default class VesselServer {
 		base: string,
 		res: ServerResponse
 	): void {
-		if (new URL(url, base).searchParams.get("get") === "index")
-			return res.end(this.vessel.index.serialize())
-
 		const params = new URL(url, base).searchParams
+		const get = new URL(url, base).searchParams.get("get")
+		if (get === "index") return res.end(this.vessel.index.serialize())
+		//if (get === "proxies") return res.end(this.vessel.getProxies())
+
 		// TODO: check for uuid and hash
 		// TODO: clean later
 		const path = params.get("path")
@@ -63,12 +69,20 @@ export default class VesselServer {
 		const lastModified = params.get("lastModified")
 		const lastAction = params.get("lastAction")
 		const lastActionBy = params.get("lastActionBy")
-		if (!path) throw Error("VesselServer.reqPOST: illegal params")
-		if (!uuid) throw Error("VesselServer.reqPOST: illegal params")
-		if (!type) throw Error("VesselServer.reqPOST: illegal params")
-		if (!lastModified) throw Error("VesselServer.reqPOST: illegal params")
-		if (!lastAction) throw Error("VesselServer.reqPOST: illegal params")
-		if (!lastActionBy) throw Error("VesselServer.reqPOST: illegal params")
+		const actionId = params.get("actionId")
+		const hash = params.get("hash")
+		const tombtype = params.get("tombtype")
+		const tombmovedto = params.get("tombtype")
+		if (!path) throw Error("VesselServer.reqGET: illegal params")
+		if (!uuid) throw Error("VesselServer.reqGET: illegal params")
+		if (!type) throw Error("VesselServer.reqGET: illegal params")
+		if (!lastModified) throw Error("VesselServer.reqGET: illegal params")
+		if (!lastAction) throw Error("VesselServer.reqGET: illegal params")
+		if (!lastActionBy) throw Error("VesselServer.reqGET: illegal params")
+		if (!actionId) throw Error("VesselServer.reqGET: illegal params")
+		//if (!hash) throw Error("VesselServer.reqGET: illegal params")
+		//if (!tombtype) throw Error("VesselServer.reqGET: illegal params")
+		//if (!tombmovedto) throw Error("VesselServer.reqGET: illegal params")
 
 		const item: Item = {
 			path,
@@ -77,6 +91,7 @@ export default class VesselServer {
 			lastModified: parseInt(lastModified),
 			lastAction: stringToActionType(lastAction),
 			lastActionBy,
+			actionId,
 		}
 
 		this.vessel.createRS(item)?.pipe(res) // TODO: add logic if null
@@ -98,13 +113,20 @@ export default class VesselServer {
 		const lastModified = params.get("lastModified")
 		const lastAction = params.get("lastAction")
 		const lastActionBy = params.get("lastActionBy")
-		//const hash = params.get("lastActionBy") // TODO: add hash and tomb
+		const actionId = params.get("actionId")
+		const hash = params.get("hash")
+		const tombtype = params.get("tombtype")
+		const tombmovedto = params.get("tombtype")
 		if (!path) throw Error("VesselServer.reqPOST: illegal params")
 		if (!uuid) throw Error("VesselServer.reqPOST: illegal params")
 		if (!type) throw Error("VesselServer.reqPOST: illegal params")
 		if (!lastModified) throw Error("VesselServer.reqPOST: illegal params")
 		if (!lastAction) throw Error("VesselServer.reqPOST: illegal params")
 		if (!lastActionBy) throw Error("VesselServer.reqPOST: illegal params")
+		if (!actionId) throw Error("VesselServer.reqPOST: illegal params")
+		if (!hash) throw Error("VesselServer.reqPOST: illegal params")
+		if (!tombtype) throw Error("VesselServer.reqPOST: illegal params")
+		if (!tombmovedto) throw Error("VesselServer.reqPOST: illegal params")
 
 		const item: Item = {
 			path,
@@ -113,10 +135,11 @@ export default class VesselServer {
 			lastModified: parseInt(lastModified),
 			lastAction: stringToActionType(lastAction),
 			lastActionBy,
+			actionId,
+			hash,
+			tomb: { type: stringToTombTypes(tombtype), movedTo: tombmovedto },
 		}
 
 		this.vessel.applyIncoming(item, req)
 	}
 }
-
-//if (require.main === module) new VesselServer().listen()

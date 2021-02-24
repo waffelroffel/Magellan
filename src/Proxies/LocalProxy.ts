@@ -1,8 +1,6 @@
 import { ReadStream } from "fs"
-import { v4 as uuid4 } from "uuid"
-import CargoList from "../CargoList"
 import { Medium } from "../enums"
-import { Item, SerializedIndex } from "../interfaces"
+import { Item, NID, IndexArray } from "../interfaces"
 import Vessel from "../Vessel"
 import Proxy from "./Proxy"
 
@@ -15,8 +13,8 @@ export default class LocalProxy extends Proxy {
 		this.local = vessel
 	}
 
-	send(item: Item, rs?: ReadStream): void {
-		this.local.applyIncoming(item, rs)
+	send(item: Item, rs?: ReadStream) {
+		this.local.applyIncoming(JSON.parse(JSON.stringify(item)), rs)
 	}
 
 	fetch(items: Item[]): (ReadStream | null)[] {
@@ -27,7 +25,11 @@ export default class LocalProxy extends Proxy {
 		})
 	}
 
-	fetchIndex(): SerializedIndex {
-		return this.local.index.asArray()
+	fetchIndex(): IndexArray {
+		return JSON.parse(this.local.index.serialize())
+	}
+
+	getProxies(): [string, NID][] {
+		throw Error()
 	}
 }

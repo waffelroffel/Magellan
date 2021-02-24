@@ -3,7 +3,7 @@ import { Socket } from "net"
 import fetch, { Response } from "node-fetch"
 import CargoList from "../CargoList"
 import { ActionTypes, ItemTypes, Medium } from "../enums"
-import { NID, Item, Streamable, SerializedIndex } from "../interfaces"
+import { NID, Item, Streamable, IndexArray } from "../interfaces"
 import Proxy from "./Proxy"
 
 /**
@@ -18,6 +18,7 @@ export default class HTTPProxy extends Proxy {
 	port: number
 	base: string
 	urlgetindex: string
+	//urlgetproxies: string
 
 	constructor(host: string, port: number) {
 		super()
@@ -25,6 +26,7 @@ export default class HTTPProxy extends Proxy {
 		this.port = port
 		this.base = `${this.protocol}${host}:${port}`
 		this.urlgetindex = `${this.base}?get=index`
+		//this.urlgetproxies = `${this.base}?get=proxies`
 	}
 
 	send(item: Item, rs?: Streamable) {
@@ -49,9 +51,16 @@ export default class HTTPProxy extends Proxy {
 		)
 	}
 
-	fetchIndex(): Promise<SerializedIndex> {
+	fetchIndex(): Promise<IndexArray> {
 		return fetch(this.urlgetindex, {
 			method: "GET",
 		}).then(res => res.json())
 	}
+	/*
+	getProxies(): Promise<[string, NID][]> {
+		return fetch(this.urlgetproxies, {
+			method: "GET",
+		}).then(res => res.json())
+	}
+	*/
 }

@@ -2,12 +2,7 @@ import { existsSync, readFileSync, writeFileSync, readdirSync } from "fs"
 import { join } from "path"
 import { v4 as uuid4 } from "uuid"
 import { FileResolveOption, ItemTypes, ActionTypes, TombTypes } from "./enums"
-import {
-	Item,
-	FileResolveMap,
-	FileRPConfig,
-	SerializedIndex,
-} from "./interfaces"
+import { Item, FileResolveMap, FileRPConfig, IndexArray } from "./interfaces"
 import makemap, { LWWConfig } from "./ResolvePolicies/FileResolvePolicies"
 import { computehash, ct } from "./utils"
 
@@ -42,7 +37,7 @@ export default class CargoList {
 		return this.index
 	}
 
-	asArray(): SerializedIndex {
+	asArray(): IndexArray {
 		return [...this.index]
 	}
 
@@ -116,6 +111,7 @@ export default class CargoList {
 			lastModified: ts,
 			lastAction: action,
 			lastActionBy: user,
+			actionId: uuid4(),
 		}
 		if (action === ActionTypes.Remove) item.tomb = { type: TombTypes.Deleted }
 		return item
@@ -141,7 +137,7 @@ export default class CargoList {
 		if (!existsSync(this.indexpath)) return
 		const oldindex = JSON.parse(
 			readFileSync(this.indexpath, { encoding: "utf8" })
-		) as SerializedIndex
+		) as IndexArray
 		oldindex.forEach(([k, v]) => v.forEach(i => this.apply(i)))
 		this.save()
 	}
@@ -324,12 +320,16 @@ export default class CargoList {
 			pushed = true
 		}
 		if (olditem.lastAction === ActionTypes.Add) {
-			let cond =
+			const cond =
 				olditem.lastModified !== newitem.lastModified
-					? olditem.lastModified > newitem.lastModified
-					: olditem.lastActionBy > newitem.lastActionBy
-			if (olditem === newitem) cond = true // TODO: this is a mess
-			if (cond) Object.assign(olditem, newitem)
+					? olditem.lastModified < newitem.lastModified
+					: olditem.lastActionBy < newitem.lastActionBy
+			if (cond) {
+				olditem.lastAction = newitem.lastAction
+				olditem.lastActionBy = newitem.lastActionBy
+				olditem.lastModified = newitem.lastModified
+				olditem.tomb = newitem.tomb
+			}
 			return pushed || cond
 		}
 		if (olditem.lastAction === ActionTypes.Remove) {
