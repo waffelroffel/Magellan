@@ -1,9 +1,6 @@
-import { createReadStream, ReadStream } from "fs"
-import { Socket } from "net"
-import fetch, { Response } from "node-fetch"
-import CargoList from "../CargoList"
-import { ActionTypes, ItemTypes, Medium } from "../enums"
-import { NID, Item, Streamable, IndexArray } from "../interfaces"
+import fetch from "node-fetch"
+import { Medium } from "../enums"
+import { Item, Streamable, IndexArray } from "../interfaces"
 import Proxy from "./Proxy"
 
 /**

@@ -7,12 +7,11 @@ import {
 } from "http"
 import { URL } from "url"
 import {
-	Medium,
 	stringToActionType,
 	stringToItemType,
 	stringToTombTypes,
 } from "./enums"
-import { Item, NID } from "./interfaces"
+import { Item } from "./interfaces"
 import Vessel from "./Vessel"
 
 const enum DEFAULT_SETTINGS {
@@ -70,9 +69,9 @@ export default class VesselServer {
 		const lastAction = params.get("lastAction")
 		const lastActionBy = params.get("lastActionBy")
 		const actionId = params.get("actionId")
-		const hash = params.get("hash")
-		const tombtype = params.get("tombtype")
-		const tombmovedto = params.get("tombtype")
+		//const hash = params.get("hash")
+		//const tombtype = params.get("tombtype")
+		//const tombmovedto = params.get("tombtype")
 		if (!path) throw Error("VesselServer.reqGET: illegal params")
 		if (!uuid) throw Error("VesselServer.reqGET: illegal params")
 		if (!type) throw Error("VesselServer.reqGET: illegal params")

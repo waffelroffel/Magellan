@@ -1,7 +1,5 @@
-import { Response } from "node-fetch"
-import CargoList from "../CargoList"
 import { Medium } from "../enums"
-import { Streamable, NID, Item, IndexArray } from "../interfaces"
+import { Streamable, Item, IndexArray } from "../interfaces"
 import { ABCVessel } from "./ABCVessel"
 
 export default abstract class Proxy extends ABCVessel {

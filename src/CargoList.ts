@@ -1,12 +1,10 @@
-import { existsSync, readFileSync, writeFileSync, readdirSync } from "fs"
+import { existsSync, readFileSync, writeFileSync } from "fs"
 import { join } from "path"
 import { v4 as uuid4 } from "uuid"
 import { FileResolveOption, ItemTypes, ActionTypes, TombTypes } from "./enums"
 import { Item, FileResolveMap, FileRPConfig, IndexArray } from "./interfaces"
 import makemap, { LWWConfig } from "./ResolvePolicies/FileResolvePolicies"
-import { computehash, ct } from "./utils"
 
-const tempuser = "bob"
 /**
  * Simple-LWW: all operations are ADD, REM, and CHG. Concurrent file movements will create duplicates across the system
  *
@@ -60,40 +58,6 @@ export default class CargoList {
 	init(items: Item[]): void {
 		items.forEach(i => this.index.set(i.path, [i]))
 		this.index.delete(this.indexpath)
-	}
-
-	initfromroot(): void {
-		const ts = ct()
-		const _init = (root: string) => {
-			readdirSync(root, { withFileTypes: true }).forEach(d => {
-				if (d.isFile() && d.name !== this.tablefile) {
-					this.push(
-						CargoList.newItem(
-							join(root, d.name),
-							uuid4(),
-							ItemTypes.File,
-							ts,
-							ActionTypes.Add,
-							tempuser
-						)
-					)
-				} else if (d.isDirectory()) {
-					this.push(
-						CargoList.newItem(
-							join(root, d.name),
-							uuid4(),
-							ItemTypes.Folder,
-							ts,
-							ActionTypes.Add,
-							tempuser
-						)
-					)
-					_init(join(root, d.name))
-				}
-			})
-		}
-
-		_init(this.rootpath)
 	}
 
 	static newItem(
