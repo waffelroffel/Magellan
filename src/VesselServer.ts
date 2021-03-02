@@ -7,9 +7,12 @@ import {
 } from "http"
 import { URL } from "url"
 import {
+	ActionTypes,
+	ItemTypes,
 	stringToActionType,
 	stringToItemType,
 	stringToTombTypes,
+	TombTypes,
 } from "./enums"
 import { Item } from "./interfaces"
 import Vessel from "./Vessel"
@@ -105,6 +108,7 @@ export default class VesselServer {
 		res: ServerResponse
 	): void {
 		const params = new URL(url, base).searchParams
+		console.log(params)
 		// TODO: clean later
 		const path = params.get("path")
 		const uuid = params.get("uuid")
@@ -115,7 +119,7 @@ export default class VesselServer {
 		const actionId = params.get("actionId")
 		const hash = params.get("hash")
 		const tombtype = params.get("tombtype")
-		const tombmovedto = params.get("tombtype")
+		const tombmovedto = params.get("tombmovedto")
 		if (!path) throw Error("VesselServer.reqPOST: illegal params")
 		if (!uuid) throw Error("VesselServer.reqPOST: illegal params")
 		if (!type) throw Error("VesselServer.reqPOST: illegal params")
@@ -124,8 +128,6 @@ export default class VesselServer {
 		if (!lastActionBy) throw Error("VesselServer.reqPOST: illegal params")
 		if (!actionId) throw Error("VesselServer.reqPOST: illegal params")
 		if (!hash) throw Error("VesselServer.reqPOST: illegal params")
-		if (!tombtype) throw Error("VesselServer.reqPOST: illegal params")
-		if (!tombmovedto) throw Error("VesselServer.reqPOST: illegal params")
 
 		const item: Item = {
 			path,
@@ -135,9 +137,25 @@ export default class VesselServer {
 			lastAction: stringToActionType(lastAction),
 			lastActionBy,
 			actionId,
-			hash,
-			tomb: { type: stringToTombTypes(tombtype), movedTo: tombmovedto },
 		}
+
+		if (stringToActionType(lastAction) === ActionTypes.Remove) {
+			if (tombtype) {
+				console.log("tombtype", tombtype, typeof tombtype)
+				item.tomb = { type: stringToTombTypes(tombtype) }
+				if (tombmovedto) {
+					console.log("moveto", tombmovedto, typeof tombmovedto)
+					item.tomb.movedTo = tombmovedto
+				}
+			}
+		}
+
+		if (stringToItemType(type) === ItemTypes.File && hash) item.hash = hash
+		else if (
+			stringToItemType(type) === ItemTypes.Folder &&
+			hash !== "undefined"
+		)
+			throw Error("VesselServer.reqPOST: illegal params")
 
 		this.vessel.applyIncoming(item, req)
 	}

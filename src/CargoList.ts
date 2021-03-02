@@ -1,9 +1,16 @@
 import { existsSync, readFileSync, writeFileSync } from "fs"
 import { join } from "path"
 import { v4 as uuid4 } from "uuid"
-import { FileResolveOption, ItemTypes, ActionTypes, TombTypes } from "./enums"
-import { Item, FileResolveMap, FileRPConfig, IndexArray } from "./interfaces"
-import makemap, { LWWConfig } from "./ResolvePolicies/FileResolvePolicies"
+import { ResolveOption, ItemTypes, ActionTypes, TombTypes } from "./enums"
+import {
+	Item,
+	FileResolveMap,
+	FileRPConfig,
+	IndexArray,
+	DirResolveMap,
+} from "./interfaces"
+import { LWWConfig } from "./ResolvePolicies/defaultconfigs"
+import { makefpmap, makedpmap } from "./ResolvePolicies/ResolvePolicies"
 
 /**
  * Simple-LWW: all operations are ADD, REM, and CHG. Concurrent file movements will create duplicates across the system
@@ -18,7 +25,9 @@ export default class CargoList {
 	private rootpath: string
 	private tablefile: string = "indextable.json"
 	private rsfile: FileResolveMap
-	private rsfilep: Map<string, FileResolveOption>
+	private rsfilep: Map<string, ResolveOption>
+	private rsdir: DirResolveMap
+	private rsdirp: Map<string, ResolveOption>
 	//private rsfolfer =
 	//private duppolicy = 0 // 0: latest timestamp wins, 1: deterministic rename one
 
@@ -26,9 +35,12 @@ export default class CargoList {
 		this.index = new Map()
 		this.rootpath = root
 		this.indexpath = join(root, this.tablefile)
-		const rs = makemap(fileconfig ?? LWWConfig)
-		this.rsfile = rs[0]
-		this.rsfilep = rs[1]
+		const frs = makefpmap(fileconfig ?? LWWConfig)
+		this.rsfile = frs[0]
+		this.rsfilep = frs[1]
+		const drs = makedpmap(fileconfig ?? LWWConfig)
+		this.rsdir = drs[0]
+		this.rsdirp = drs[1]
 	}
 
 	testGet(): Map<string, Item[]> {
@@ -131,7 +143,12 @@ export default class CargoList {
 	}
 
 	private find(item: Item): Item | null {
-		return this.index.get(item.path)?.find(n => n.uuid === item.uuid) ?? null
+		const arr = this.index.get(item.path) // TODO: tombs with MOVED or RENAMED
+		return (
+			arr?.find(n => n.uuid === item.uuid) ?? // matching id
+			arr?.reduce((n1, n2) => (n1.lastModified > n2.lastModified ? n1 : n2)) ?? // latest
+			null
+		)
 	}
 
 	findbyhash(path: string, hash: string): Item | null {
@@ -144,8 +161,8 @@ export default class CargoList {
 		else itemlist.push(item)
 	}
 
-	private update(newitem: Item, rp: FileResolveOption | undefined): void {
-		if (rp === FileResolveOption.LWW) {
+	private update(newitem: Item, rp: ResolveOption | undefined): void {
+		if (rp === ResolveOption.LWW) {
 			this.set(newitem.path, [newitem])
 			return
 		}
@@ -243,7 +260,7 @@ export default class CargoList {
 
 	private applyADDFolder(newitem: Item): boolean {
 		if (newitem.path === this.indexpath) return false
-		let olditem = this.getLatest(newitem.path) // TODO get back to it later
+		let olditem = this.find(newitem) // TODO get back to it later
 		let pushed = false
 
 		if (!olditem) {
@@ -252,21 +269,14 @@ export default class CargoList {
 			pushed = true
 		}
 		if (olditem.lastAction === ActionTypes.Add) {
-			// TODO: change to new entry instead of overwriting old
-			const cond =
-				olditem.lastModified !== newitem.lastModified
-					? olditem.lastModified > newitem.lastModified
-					: olditem.lastActionBy > newitem.lastActionBy
-			if (cond) Object.assign(olditem, newitem)
-			return pushed || false // TODO: clean
+			const [item, n] = this.rsdir.addadd(olditem, newitem)
+			this.update(item, this.rsdirp.get("addadd"))
+			return pushed || n === 1
 		}
 		if (olditem.lastAction === ActionTypes.Remove) {
-			const cond =
-				olditem.lastModified !== newitem.lastModified
-					? olditem.lastModified > newitem.lastModified
-					: olditem.lastActionBy > newitem.lastActionBy
-			if (cond) Object.assign(olditem, newitem)
-			return pushed || cond
+			const [item, n] = this.rsdir.addrem(olditem, newitem)
+			this.update(item, this.rsdirp.get("addrem"))
+			return pushed || n === 1
 		}
 		if (olditem.lastAction === ActionTypes.Change)
 			throw Error("CargoList.applyADDFolder: olditem.lastAction === CHG")
@@ -284,25 +294,14 @@ export default class CargoList {
 			pushed = true
 		}
 		if (olditem.lastAction === ActionTypes.Add) {
-			const cond =
-				olditem.lastModified !== newitem.lastModified
-					? olditem.lastModified < newitem.lastModified
-					: olditem.lastActionBy < newitem.lastActionBy
-			if (cond) {
-				olditem.lastAction = newitem.lastAction
-				olditem.lastActionBy = newitem.lastActionBy
-				olditem.lastModified = newitem.lastModified
-				olditem.tomb = newitem.tomb
-			}
-			return pushed || cond
+			const [item, n] = this.rsdir.addrem(olditem, newitem)
+			this.update(item, this.rsdirp.get("addrem"))
+			return pushed || n === 1
 		}
 		if (olditem.lastAction === ActionTypes.Remove) {
-			const cond =
-				olditem.lastModified !== newitem.lastModified
-					? olditem.lastModified > newitem.lastModified
-					: olditem.lastActionBy > newitem.lastActionBy
-			if (cond) Object.assign(olditem, newitem)
-			return pushed || false // TODO: clean
+			const [item, n] = this.rsdir.remrem(olditem, newitem)
+			this.update(item, this.rsdirp.get("remrem"))
+			return pushed || n === 1
 		}
 		if (olditem.lastAction === ActionTypes.Change)
 			throw Error("CargoList.applyREMOVEFolder: olditem.lastAction === CHG")

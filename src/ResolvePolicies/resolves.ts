@@ -43,7 +43,7 @@ const chgchglww: ResolveLogic = addaddlww
 
 const chgchgdup: ResolveLogic = addadddup
 
-const fileresolvepolicies = new Map<string, ResolveLogic[]>()
+const rp = new Map<string, ResolveLogic[]>()
 	.set("addadd", [addaddlww, addadddup])
 	.set("addrem", [addremlww, addremdup])
 	.set("addchg", [addchglww, addchgdup])
@@ -51,4 +51,4 @@ const fileresolvepolicies = new Map<string, ResolveLogic[]>()
 	.set("remchg", [remchglww])
 	.set("chgchg", [chgchglww, chgchgdup])
 
-export default fileresolvepolicies
+export default rp

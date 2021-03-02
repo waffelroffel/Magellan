@@ -4,7 +4,7 @@ import {
 	TombTypes,
 	ItemTypes,
 	ActionTypes,
-	FileResolveOption,
+	ResolveOption,
 	Medium,
 } from "./enums"
 import { Response } from "node-fetch"
@@ -64,12 +64,12 @@ export type Streamable =
 export type ResolveLogic = (item1: Item, item2: Item) => [Item, number]
 
 export interface FileRPConfig {
-	addadd: FileResolveOption
-	addrem: FileResolveOption
-	addchg: FileResolveOption
-	remrem: FileResolveOption
-	remchg: FileResolveOption
-	chgchg: FileResolveOption
+	addadd: ResolveOption
+	addrem: ResolveOption
+	addchg: ResolveOption
+	remrem: ResolveOption
+	remchg: ResolveOption
+	chgchg: ResolveOption
 }
 
 export interface FileResolveMap {
@@ -79,4 +79,16 @@ export interface FileResolveMap {
 	remrem: ResolveLogic
 	remchg: ResolveLogic
 	chgchg: ResolveLogic
+}
+
+export interface DirRPConfig {
+	addadd: ResolveOption
+	addrem: ResolveOption
+	remrem: ResolveOption
+}
+
+export interface DirResolveMap {
+	addadd: ResolveLogic
+	addrem: ResolveLogic
+	remrem: ResolveLogic
 }

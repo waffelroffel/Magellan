@@ -134,7 +134,9 @@ export default class Vessel extends ABCVessel {
 
 		if (type === ItemTypes.File && action === ActionTypes.Remove) {
 			const newpath = this.localtempfilehashes.get(item.hash ?? "") ?? "" //TODO
-			item.tomb = { type: TombTypes.Moved, movedTo: newpath }
+
+			//if (newpath) item.tomb = { type: TombTypes.Moved, movedTo: newpath }
+
 			this.localtempfilehashes.delete(item.hash ?? "")
 		} else if (
 			type === ItemTypes.File &&
@@ -171,7 +173,7 @@ export default class Vessel extends ABCVessel {
 		} else if (item.lastAction === ActionTypes.Add && !existsSync(fullpath)) {
 			this.skiplist.add(fullpath)
 			mkdirSync(fullpath, { recursive: true })
-		} else throw Error("Vessel.applyFolderIO: illegal argument")
+		} //else throw Error("Vessel.applyFolderIO: illegal argument")
 	}
 
 	private applyFileIO(item: Item, fullpath: string, rs?: Streamable) {

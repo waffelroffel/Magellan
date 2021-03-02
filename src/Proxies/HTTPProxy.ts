@@ -1,6 +1,6 @@
 import fetch from "node-fetch"
 import { Medium } from "../enums"
-import { Item, Streamable, IndexArray } from "../interfaces"
+import { Item, Streamable, IndexArray, Tomb } from "../interfaces"
 import Proxy from "./Proxy"
 
 /**
@@ -35,7 +35,13 @@ export default class HTTPProxy extends Proxy {
 
 	private makePOST(item: Item): string {
 		const params = Object.entries(item)
-			.map(([k, v]) => `${k}=${v}`)
+			.map(([k, v]) => {
+				if (k !== "tomb") return `${k}=${v}`
+				const t = v as Tomb
+				const p = `tombtype=${t.type}`
+				if (t.movedTo) return p + `&tombmovedto=${t.movedTo}`
+				return p
+			})
 			.join("&")
 		return `${this.base}?${params}`
 	}

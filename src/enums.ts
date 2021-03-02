@@ -70,7 +70,7 @@ export const enum Medium {
 
 // ---------------- RESOLVES ----------------
 //TODO clean values
-export const enum FileResolveOption {
+export const enum ResolveOption {
 	LWW = 0,
 	DUP = 1,
 }
