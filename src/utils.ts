@@ -1,7 +1,5 @@
 import { createHash } from "crypto"
-import { createReadStream, lstatSync } from "fs"
-import path = require("path")
-import { ItemTypes } from "./enums"
+import { createReadStream, readFileSync } from "fs"
 
 // timestamp for log
 export function cts(): string {
@@ -14,5 +12,11 @@ export function ct(): number {
 }
 
 export function computehash(path: string): string {
-	return createReadStream(path).pipe(createHash("sha256")).digest("hex")
+	const hash = createHash("sha256")
+	return hash.update(readFileSync(path)).digest("hex") // TODO: change to stream
+	/*return new Promise(resolve =>
+		createReadStream(path)
+			.on("end", () => resolve(hash.digest("hex")))
+			.pipe(hash)
+	)*/
 }

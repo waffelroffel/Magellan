@@ -1,5 +1,5 @@
 import fetch from "node-fetch"
-import { Medium } from "../enums"
+import { ItemTypes as IT, Medium } from "../enums"
 import { Item, Streamable, IndexArray, Tomb } from "../interfaces"
 import Proxy from "./Proxy"
 
@@ -39,18 +39,19 @@ export default class HTTPProxy extends Proxy {
 				if (k !== "tomb") return `${k}=${v}`
 				const t = v as Tomb
 				const p = `tombtype=${t.type}`
-				if (t.movedTo) return p + `&tombmovedto=${t.movedTo}`
-				return p
+				return t.movedTo ? p + `&tombmovedto=${t.movedTo}` : p
 			})
 			.join("&")
 		return `${this.base}?${params}`
 	}
 
-	fetch(items: Item[]): Promise<NodeJS.ReadableStream>[] {
+	fetch(items: Item[]): (Promise<NodeJS.ReadableStream> | null)[] {
 		return items.map(item =>
-			fetch(this.makePOST(item), {
-				method: "GET",
-			}).then(res => res.body)
+			item.type === IT.File
+				? fetch(this.makePOST(item), {
+						method: "GET",
+				  }).then(res => res.body)
+				: null
 		)
 	}
 

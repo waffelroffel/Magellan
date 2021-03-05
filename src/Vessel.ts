@@ -8,7 +8,7 @@ import {
 	createWriteStream,
 	createReadStream,
 } from "fs"
-import { join } from "path"
+import { join, sep } from "path"
 import { v4 as uuid4 } from "uuid"
 import { ABCVessel } from "./Proxies/ABCVessel"
 import CargoList from "./CargoList"
@@ -27,13 +27,13 @@ import VesselServer from "./VesselServer"
  * 	 the crdt can be treated as an state-based crdt during network init and rejoin
  *   and as an operation-based when online (need log for transmission gurantee) (or even just send whole state in updates)
  * - matching file hashes needs to be handled differently
- * - folder logic in CargoList is a mess
  *
  */
 export default class Vessel extends ABCVessel {
 	user: string
 	root: string
 	rooti: number
+	rootarr: string[]
 	tableEnd = "indextable.json"
 	tablePath = "indextable.json"
 	watcher: FSWatcher
@@ -52,6 +52,7 @@ export default class Vessel extends ABCVessel {
 
 		this.root = root
 		this.rooti = root.length
+		this.rootarr = root.split(sep)
 		this.tablePath = join(root, this.tableEnd)
 
 		this.index = new CargoList(root)
@@ -82,8 +83,8 @@ export default class Vessel extends ABCVessel {
 		return path.substring(this.rooti)
 	}
 
-	private logger(...msg: any[]): void {
-		console.log(cts(), ...msg)
+	logger(...msg: any[]): void {
+		console.log(cts(), this.user, ...msg)
 	}
 
 	private setupEvents() {
@@ -101,16 +102,15 @@ export default class Vessel extends ABCVessel {
 				this.applyLocal(path, ItemTypes.Folder, ActionTypes.Add)
 			)
 			.on("unlinkDir", (path: string) => {
-				if (path.includes("Magellan")) return
-				// TODO: temp solution to remove second trigger on fill path
+				const patharr = path.split(sep)
+				if (this.rootarr.some((p, i) => p !== patharr[i])) return // when deleting folder with files, full path is returned
 				this.applyLocal(path, ItemTypes.Folder, ActionTypes.Remove)
-			}) // TODO: when deleting folder with files, full path is returned, error when deleting folder with folders due to order of deletion parent->child
-			// A second event with the fullpath is triggered?
+			}) // TODO: error when deleting folder with folders due to order of deletion parent->child
 			.on("error", this.logger) // TODO: when empty folder gets deleted throws error
 			.on("ready", () => {
 				this.init = false
 				this.index.save()
-				this.logger(this.user, "PLVS VLTRA!")
+				this.logger("PLVS VLTRA!")
 				//this.logger(this.log.history)
 			})
 	}
@@ -146,7 +146,7 @@ export default class Vessel extends ABCVessel {
 
 		//this.log.push(item, this.user)
 		const applied = this.index.apply(item)
-		this.logger(this.user, action, path, applied)
+		this.logger(action, path, applied)
 		if (/*!applied ||*/ this.init) return
 
 		this.localtempfilehashes.set(item.hash ?? "", item.path) // TODO
@@ -156,7 +156,7 @@ export default class Vessel extends ABCVessel {
 
 	applyIncoming(item: Item, rs?: Streamable): void {
 		const applied = this.index.apply(item)
-		this.logger(this.user, "REMOTE", item.lastAction, item.path, applied)
+		this.logger("REMOTE", item.lastAction, item.path, applied)
 		if (!applied) return
 
 		const full = join(this.root, item.path)
@@ -173,7 +173,8 @@ export default class Vessel extends ABCVessel {
 		} else if (item.lastAction === ActionTypes.Add && !existsSync(fullpath)) {
 			this.skiplist.add(fullpath)
 			mkdirSync(fullpath, { recursive: true })
-		} //else throw Error("Vessel.applyFolderIO: illegal argument")
+		} else console.log("Illegal io op:", item.lastAction, fullpath)
+		//throw Error("Vessel.applyFolderIO: illegal argument")
 	}
 
 	private applyFileIO(item: Item, fullpath: string, rs?: Streamable) {
@@ -187,12 +188,9 @@ export default class Vessel extends ABCVessel {
 	}
 
 	createRS(item: Item): Streamable {
-		if (
-			item.type === ItemTypes.Folder ||
-			item.lastAction === ActionTypes.Remove
-		)
-			return null
-		this.logger(this.user, "createRS", item.path)
+		if (item.type === ItemTypes.Folder) return null
+		if (item.lastAction === ActionTypes.Remove) return null
+		this.logger("createRS", item.path)
 		return createReadStream(join(this.root, item.path))
 	}
 
@@ -227,7 +225,7 @@ export default class Vessel extends ABCVessel {
 		data: IndexArray | Promise<IndexArray>,
 		proxy: Proxy
 	): void {
-		this.logger(this.user, "updateCargo")
+		this.logger("UPDATING")
 
 		Promise.resolve(data).then(arr => {
 			const items = arr.flatMap(kv => kv[1]).filter(i => this.index.apply(i))

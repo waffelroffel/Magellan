@@ -1,20 +1,15 @@
 // ---------------- CARGOLIST ----------------
 export const enum ItemTypes {
-	//RootFolder,
-	//RootFile,
 	Folder,
 	File,
 }
 
-export const stringToItemType = (value: string): ItemTypes => {
-	switch (value) {
-		case "0":
-			return ItemTypes.Folder
-		case "1":
-			return ItemTypes.File
-		default:
-			throw Error("stringToItemType: invalid type")
-	}
+const ITEM_TYPES = [ItemTypes.Folder, ItemTypes.File]
+
+export const toItemType = (value: string): ItemTypes => {
+	const type = ITEM_TYPES.find(it => it.toString() === value)
+	if (type === undefined) throw Error("toItemType: invalid type")
+	return type
 }
 
 export const enum TombTypes {
@@ -23,17 +18,12 @@ export const enum TombTypes {
 	Deleted,
 }
 
-export const stringToTombTypes = (value: string): TombTypes => {
-	switch (value) {
-		case "0":
-			return TombTypes.Moved
-		case "1":
-			return TombTypes.Renamed
-		case "2":
-			return TombTypes.Deleted
-		default:
-			throw Error("stringToTombTypes: invalid type")
-	}
+const TOMB_TYPES = [TombTypes.Moved, TombTypes.Renamed, TombTypes.Deleted]
+
+export const toTombTypes = (value: string): TombTypes => {
+	const tomb = TOMB_TYPES.find(tt => tt.toString() === value)
+	if (tomb === undefined) throw Error("toTombTypes: invalid type")
+	return tomb
 }
 
 export const enum ActionTypes {
@@ -44,33 +34,32 @@ export const enum ActionTypes {
 	Rename = "RNM",
 }
 
-export const stringToActionType = (value: string): ActionTypes => {
-	switch (value) {
-		case ActionTypes.Add:
-			return ActionTypes.Add
-		case ActionTypes.Remove:
-			return ActionTypes.Remove
-		case ActionTypes.Move:
-			return ActionTypes.Move
-		case ActionTypes.Rename:
-			return ActionTypes.Rename
-		case ActionTypes.Change:
-			return ActionTypes.Change
-		default:
-			throw Error("stringToActionType: invalid type")
-	}
+const ACTION_TYPES = [
+	ActionTypes.Add,
+	ActionTypes.Remove,
+	ActionTypes.Move,
+	ActionTypes.Change,
+	ActionTypes.Rename,
+]
+
+export const toActionType = (value: string): ActionTypes => {
+	const action = ACTION_TYPES.find(at => at === value)
+	if (action === undefined) throw Error("toActionType: invalid type")
+	return action
 }
+
+//export type Resolution = [boolean, string, () => {}]
 
 // ---------------- NETWORK ----------------
 export const enum Medium {
 	http,
-	socket,
+	//socket,
 	local,
 }
 
 // ---------------- RESOLVES ----------------
 //TODO clean values
 export const enum ResolveOption {
-	LWW = 0,
-	DUP = 1,
+	LWW,
+	DUP,
 }

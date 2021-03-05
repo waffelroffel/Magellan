@@ -7,12 +7,11 @@ import {
 } from "http"
 import { URL } from "url"
 import {
-	ActionTypes,
-	ItemTypes,
-	stringToActionType,
-	stringToItemType,
-	stringToTombTypes,
-	TombTypes,
+	ActionTypes as AT,
+	ItemTypes as IT,
+	toActionType,
+	toItemType,
+	toTombTypes,
 } from "./enums"
 import { Item } from "./interfaces"
 import Vessel from "./Vessel"
@@ -34,17 +33,17 @@ export default class VesselServer {
 		this.host = host ?? DEFAULT_SETTINGS.HOST
 		this.port = port ?? DEFAULT_SETTINGS.PORT
 		this.base = `${this.protocol}${this.host}:${this.port}`
-		this.server = createServer(this.makeReqLis(this.base))
+		this.server = createServer(this.reqLis(this.base))
 		this.vessel = vessel
 	}
 
 	listen() {
 		this.server.listen(this.port, this.host, () => {
-			console.log(this.vessel.user, this.server.address())
+			this.vessel.logger("ONLINE", this.server.address())
 		})
 	}
 
-	private makeReqLis(base: string): RequestListener {
+	private reqLis(base: string): RequestListener {
 		return (req, res) => {
 			if (!req.url) throw Error("VesselServer.requestListener: url undefined")
 			if (req.method === "POST") this.reqPOST(req, req.url, base, res)
@@ -52,6 +51,7 @@ export default class VesselServer {
 			else throw Error("VesselServer.requestListener: method not POST nor GET")
 		}
 	}
+
 	private reqGET(
 		req: IncomingMessage,
 		url: string,
@@ -64,41 +64,26 @@ export default class VesselServer {
 		//if (get === "proxies") return res.end(this.vessel.getProxies())
 
 		// TODO: check for uuid and hash
-		// TODO: clean later
-		const path = params.get("path")
-		const uuid = params.get("uuid")
-		const type = params.get("type")
-		const lastModified = params.get("lastModified")
-		const lastAction = params.get("lastAction")
-		const lastActionBy = params.get("lastActionBy")
-		const actionId = params.get("actionId")
+		const cparams = this.checkCoreParams(params)
+		if (!cparams) return res.destroy() // TODO: add error message
+
 		//const hash = params.get("hash")
-		//const tombtype = params.get("tombtype")
-		//const tombmovedto = params.get("tombtype")
-		if (!path) throw Error("VesselServer.reqGET: illegal params")
-		if (!uuid) throw Error("VesselServer.reqGET: illegal params")
-		if (!type) throw Error("VesselServer.reqGET: illegal params")
-		if (!lastModified) throw Error("VesselServer.reqGET: illegal params")
-		if (!lastAction) throw Error("VesselServer.reqGET: illegal params")
-		if (!lastActionBy) throw Error("VesselServer.reqGET: illegal params")
-		if (!actionId) throw Error("VesselServer.reqGET: illegal params")
 		//if (!hash) throw Error("VesselServer.reqGET: illegal params")
-		//if (!tombtype) throw Error("VesselServer.reqGET: illegal params")
-		//if (!tombmovedto) throw Error("VesselServer.reqGET: illegal params")
 
 		const item: Item = {
-			path,
-			uuid,
-			type: stringToItemType(type),
-			lastModified: parseInt(lastModified),
-			lastAction: stringToActionType(lastAction),
-			lastActionBy,
-			actionId,
+			path: cparams[0],
+			uuid: cparams[1],
+			type: toItemType(cparams[2]),
+			lastModified: parseInt(cparams[3]),
+			lastAction: toActionType(cparams[4]),
+			lastActionBy: cparams[5],
+			actionId: cparams[6],
 		}
 
-		this.vessel.createRS(item)?.pipe(res) // TODO: add logic if null
+		if (item.lastAction === AT.Remove) return res.destroy() // TODO: error message: illegal argument
 
-		//throw Error("VesselServer.reqGET: invalid get parameter")
+		// TODO: validate file before creating stream
+		this.vessel.createRS(item)?.pipe(res) ?? res.destroy() // TODO: error message: file not found
 	}
 
 	private reqPOST(
@@ -108,55 +93,56 @@ export default class VesselServer {
 		res: ServerResponse
 	): void {
 		const params = new URL(url, base).searchParams
-		console.log(params)
-		// TODO: clean later
-		const path = params.get("path")
-		const uuid = params.get("uuid")
-		const type = params.get("type")
-		const lastModified = params.get("lastModified")
-		const lastAction = params.get("lastAction")
-		const lastActionBy = params.get("lastActionBy")
-		const actionId = params.get("actionId")
-		const hash = params.get("hash")
-		const tombtype = params.get("tombtype")
-		const tombmovedto = params.get("tombmovedto")
-		if (!path) throw Error("VesselServer.reqPOST: illegal params")
-		if (!uuid) throw Error("VesselServer.reqPOST: illegal params")
-		if (!type) throw Error("VesselServer.reqPOST: illegal params")
-		if (!lastModified) throw Error("VesselServer.reqPOST: illegal params")
-		if (!lastAction) throw Error("VesselServer.reqPOST: illegal params")
-		if (!lastActionBy) throw Error("VesselServer.reqPOST: illegal params")
-		if (!actionId) throw Error("VesselServer.reqPOST: illegal params")
-		if (!hash) throw Error("VesselServer.reqPOST: illegal params")
+
+		const cparams = this.checkCoreParams(params)
+		if (!cparams) return res.destroy() // TODO: add error message: illegal params
 
 		const item: Item = {
-			path,
-			uuid,
-			type: stringToItemType(type),
-			lastModified: parseInt(lastModified),
-			lastAction: stringToActionType(lastAction),
-			lastActionBy,
-			actionId,
+			path: cparams[0],
+			uuid: cparams[1],
+			type: toItemType(cparams[2]),
+			lastModified: parseInt(cparams[3]),
+			lastAction: toActionType(cparams[4]),
+			lastActionBy: cparams[5],
+			actionId: cparams[6],
 		}
 
-		if (stringToActionType(lastAction) === ActionTypes.Remove) {
-			if (tombtype) {
-				console.log("tombtype", tombtype, typeof tombtype)
-				item.tomb = { type: stringToTombTypes(tombtype) }
-				if (tombmovedto) {
-					console.log("moveto", tombmovedto, typeof tombmovedto)
-					item.tomb.movedTo = tombmovedto
-				}
-			}
-		}
+		if (item.lastAction === AT.Remove && !this.applyTomb(item, params))
+			throw Error()
 
-		if (stringToItemType(type) === ItemTypes.File && hash) item.hash = hash
-		else if (
-			stringToItemType(type) === ItemTypes.Folder &&
-			hash !== "undefined"
-		)
-			throw Error("VesselServer.reqPOST: illegal params")
+		const hash = params.get("hash")
+		if (item.type === IT.File && hash) item.hash = hash
+		// else if (item.type === IT.Folder && hash !== "undefined") throw Error("VesselServer.reqPOST: illegal params")
 
-		this.vessel.applyIncoming(item, req)
+		console.log(item.path)
+		this.vessel.applyIncoming(item, req) // TODO: return boolean
+		res.end("Transfer successful")
+	}
+
+	private checkCoreParams(params: URLSearchParams): string[] | null {
+		const cparams = [
+			params.get("path"),
+			params.get("uuid"),
+			params.get("type"),
+			params.get("lastModified"),
+			params.get("lastAction"),
+			params.get("lastActionBy"),
+			params.get("actionId"),
+		]
+
+		return cparams.every(Boolean) ? (cparams as string[]) : null
+	}
+
+	private checkTombParams(params: URLSearchParams): (string | null)[] | null {
+		const tparams = [params.get("tombtype"), params.get("movedto")]
+		return !tparams[0] && tparams[1] ? null : tparams
+	}
+
+	private applyTomb(item: Item, params: URLSearchParams): boolean {
+		const tparams = this.checkTombParams(params)
+		if (!tparams || !tparams[0]) return false
+		item.tomb = { type: toTombTypes(tparams[0]) }
+		if (tparams[1]) item.tomb.movedTo = tparams[1]
+		return true
 	}
 }

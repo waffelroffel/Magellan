@@ -2,7 +2,7 @@
 	"compilerOptions": {
 		"module": "commonjs",
 		"target": "ES2019",
-		"typeRoots": ["./src/types", "./node_modules/@types"],
+		"typeRoots": ["./node_modules/@types"],
 		"strict": true,
 		"outDir": "build"
 		//"noUnusedLocals": true
