@@ -1,7 +1,47 @@
+import { readdirSync } from "fs"
+import { join } from "path"
 import CargoList from "../src/CargoList"
 import { Item, Tomb } from "../src/interfaces"
+import { computehash } from "../src/utils"
 
-export default function isDeepEqual(c1: CargoList, c2: CargoList): boolean {
+export function compFiles(root1: string, root2: string): boolean {
+	const [ds1, fs1] = getAllFiles(root1)
+	const [ds2, fs2] = getAllFiles(root2)
+	if (ds1.length !== ds2.length) return false
+	if (ds1.some((d1, i) => d1 !== ds2[i])) return false
+	if (fs1.length !== fs2.length) return false
+	if (fs1.some((f1, i) => !compFile(root1, f1, root2, fs2[i]))) return false
+	return true
+}
+
+function compFile(r1: string, f1: string, r2: string, f2: string): boolean {
+	return computehash(join(r1, f1)) === computehash(join(r2, f2))
+}
+
+function getAllFiles(path: string): [string[], string[]] {
+	const _getAllFiles = (
+		path: string,
+		parent: string,
+		dirs: string[],
+		files: string[]
+	): void => {
+		readdirSync(path, { withFileTypes: true }).forEach(d => {
+			if (d.name === "indextable.json") return
+			const subpath = join(parent, d.name)
+			if (d.isDirectory()) {
+				dirs.push(subpath)
+				_getAllFiles(join(path, d.name), subpath, dirs, files)
+			} else if (d.isFile()) files.push(subpath)
+		})
+	}
+
+	const dirs: string[] = []
+	const files: string[] = []
+	_getAllFiles(path, "", dirs, files)
+	return [dirs, files]
+}
+
+export function isDeepEqual(c1: CargoList, c2: CargoList): boolean {
 	const index1 = c1.testGet()
 	const index2 = c2.testGet()
 	const keys1 = [...index1.keys()]

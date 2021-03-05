@@ -1,13 +1,17 @@
 import { join } from "path"
 import { Medium } from "../src/enums"
 import Vessel from "../src/Vessel"
-import isDeepEqual from "./utils.test"
+import { compFiles, isDeepEqual } from "./utils.test"
 
-const dave = new Vessel("dave", join("testroot", "dave", "root")).rejoin()
-const evan = new Vessel("evan", join("testroot", "evan", "root")).rejoin()
+const daveroot = join("testroot", "dave", "root")
+const evanroot = join("testroot", "evan", "root")
+
+const dave = new Vessel("dave", daveroot).rejoin()
+const evan = new Vessel("evan", evanroot).rejoin()
 
 setTimeout(() => {
 	console.log("Pre index equal: ", isDeepEqual(dave.index, evan.index))
+	console.log("Pre files equal: ", compFiles(daveroot, evanroot))
 }, 1000)
 
 setTimeout(() => {
@@ -18,5 +22,6 @@ setTimeout(() => {
 
 	setTimeout(() => {
 		console.log("Post index equal: ", isDeepEqual(dave.index, evan.index))
+		console.log("Post files equal: ", compFiles(daveroot, evanroot))
 	}, 2000)
 }, 2000)
