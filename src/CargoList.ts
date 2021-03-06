@@ -175,6 +175,7 @@ export default class CargoList {
 		return [rl, ro]
 	}
 
+	// TODO: conflicts at dst (res.after.path) need to be considered
 	private resolve(oldi: Item, newi: Item, pol: string): Resolution[] {
 		const [rl, ro] = this.getResPol(oldi.type, pol)
 		if (oldi === newi) {

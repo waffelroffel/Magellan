@@ -3,8 +3,8 @@ import { Medium } from "../src/enums"
 import Vessel from "../src/Vessel"
 import { compFiles, isDeepEqual } from "./utils.test"
 
-const daveroot = join("testroot", "dave", "root")
-const evanroot = join("testroot", "evan", "root")
+const daveroot = join("testroot", "dave")
+const evanroot = join("testroot", "evan")
 
 const dave = new Vessel("dave", daveroot).rejoin()
 const evan = new Vessel("evan", evanroot).rejoin()
