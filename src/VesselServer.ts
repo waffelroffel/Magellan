@@ -7,8 +7,8 @@ import {
 } from "http"
 import { URL } from "url"
 import {
-	ActionTypes as AT,
-	ItemTypes as IT,
+	ActionType as AT,
+	ItemType as IT,
 	toActionType,
 	toItemType,
 	toTombTypes,
@@ -33,7 +33,7 @@ export default class VesselServer {
 		this.host = host ?? DEFAULT_SETTINGS.HOST
 		this.port = port ?? DEFAULT_SETTINGS.PORT
 		this.base = `${this.protocol}${this.host}:${this.port}`
-		this.server = createServer(this.reqLis(this.base))
+		this.server = createServer(this.reqLis())
 		this.vessel = vessel
 	}
 
@@ -43,80 +43,60 @@ export default class VesselServer {
 		})
 	}
 
-	private reqLis(base: string): RequestListener {
+	private reqLis(): RequestListener {
 		return (req, res) => {
-			if (!req.url) throw Error("VesselServer.requestListener: url undefined")
-			if (req.method === "POST") this.reqPOST(req, req.url, base, res)
-			else if (req.method === "GET") this.reqGET(req, req.url, base, res)
-			else throw Error("VesselServer.requestListener: method not POST nor GET")
+			if (req.method === "POST") this.reqPOST(req, res)
+			else if (req.method === "GET") this.reqGET(req, res)
+			else throw Error(`VesselServer.reqLis: ${req.method} unsupported`)
 		}
 	}
 
-	private reqGET(
-		req: IncomingMessage,
-		url: string,
-		base: string,
-		res: ServerResponse
-	): void {
-		const params = new URL(url, base).searchParams
-		const get = new URL(url, base).searchParams.get("get")
-		if (get === "index") return res.end(this.vessel.index.serialize())
+	private reqGET(req: IncomingMessage, res: ServerResponse): void {
+		const params = this.getParams(req)
+		if (params.get("get") === "index")
+			return res.end(this.vessel.index.serialize())
 		//if (get === "proxies") return res.end(this.vessel.getProxies())
 
-		// TODO: check for uuid and hash
 		const cparams = this.checkCoreParams(params)
 		if (!cparams) return res.destroy() // TODO: add error message
 
-		//const hash = params.get("hash")
-		//if (!hash) throw Error("VesselServer.reqGET: illegal params")
-
-		const item: Item = {
-			path: cparams[0],
-			uuid: cparams[1],
-			type: toItemType(cparams[2]),
-			lastModified: parseInt(cparams[3]),
-			lastAction: toActionType(cparams[4]),
-			lastActionBy: cparams[5],
-			actionId: cparams[6],
-		}
-
+		const item = this.makeItem(cparams)
 		if (item.lastAction === AT.Remove) return res.destroy() // TODO: error message: illegal argument
-
-		// TODO: validate file before creating stream
+		// TODO: add hash and validate file before creating stream
 		this.vessel.createRS(item)?.pipe(res) ?? res.destroy() // TODO: error message: file not found
 	}
 
-	private reqPOST(
-		req: IncomingMessage,
-		url: string,
-		base: string,
-		res: ServerResponse
-	): void {
-		const params = new URL(url, base).searchParams
-
+	private reqPOST(req: IncomingMessage, res: ServerResponse): void {
+		const params = this.getParams(req)
 		const cparams = this.checkCoreParams(params)
 		if (!cparams) return res.destroy() // TODO: add error message: illegal params
 
-		const item: Item = {
-			path: cparams[0],
-			uuid: cparams[1],
-			type: toItemType(cparams[2]),
-			lastModified: parseInt(cparams[3]),
-			lastAction: toActionType(cparams[4]),
-			lastActionBy: cparams[5],
-			actionId: cparams[6],
-		}
-
+		const item = this.makeItem(cparams)
 		if (item.lastAction === AT.Remove && !this.applyTomb(item, params))
 			throw Error()
-
 		const hash = params.get("hash")
 		if (item.type === IT.File && hash) item.hash = hash
 		// else if (item.type === IT.Folder && hash !== "undefined") throw Error("VesselServer.reqPOST: illegal params")
 
-		console.log(item.path)
 		this.vessel.applyIncoming(item, req) // TODO: return boolean
 		res.end("Transfer successful")
+	}
+
+	private getParams(req: IncomingMessage): URLSearchParams {
+		if (!req.url) throw Error()
+		return new URL(req.url, this.base).searchParams
+	}
+
+	private makeItem(params: string[]): Item {
+		return {
+			path: params[0],
+			uuid: params[1],
+			type: toItemType(params[2]),
+			lastModified: parseInt(params[3]),
+			lastAction: toActionType(params[4]),
+			lastActionBy: params[5],
+			actionId: params[6],
+		}
 	}
 
 	private checkCoreParams(params: URLSearchParams): string[] | null {

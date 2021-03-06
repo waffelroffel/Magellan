@@ -1,5 +1,5 @@
 import fetch from "node-fetch"
-import { ItemTypes as IT, Medium } from "../enums"
+import { ItemType as IT, Medium } from "../enums"
 import { Item, Streamable, IndexArray, Tomb } from "../interfaces"
 import Proxy from "./Proxy"
 

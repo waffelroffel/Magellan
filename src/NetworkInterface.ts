@@ -1,6 +1,5 @@
-import { v4 as uuid4 } from "uuid"
 import { Medium } from "./enums"
-import { NID, Item, StreamCreator, Streamable } from "./interfaces"
+import { NID, Item, Streamable } from "./interfaces"
 import LocalProxy from "./Proxies/LocalProxy"
 import Vessel from "./Vessel"
 import Proxy from "./Proxies/Proxy"

@@ -1,16 +1,23 @@
 import { existsSync, readFileSync, writeFileSync } from "fs"
 import { join } from "path"
 import { v4 as uuid4 } from "uuid"
-import { ResolveOption, ItemTypes, ActionTypes, TombTypes } from "./enums"
+import {
+	ResolveOption as RO,
+	ItemType as IT,
+	ActionType as AT,
+	TombType as TT,
+} from "./enums"
 import {
 	Item,
-	FileResolveMap,
 	FileRPConfig,
 	IndexArray,
-	DirResolveMap,
+	DirRPConfig,
+	ResolveLogic as RL,
 } from "./interfaces"
-import { LWWConfig } from "./ResolvePolicies/defaultconfigs"
+import { LWWDirConfig, LWWFileConfig } from "./ResolvePolicies/defaultconfigs"
 import { makefpmap, makedpmap } from "./ResolvePolicies/ResolvePolicies"
+import { Resolution } from "./interfaces"
+import { ct } from "./utils"
 
 /**
  * Simple-LWW: all operations are ADD, REM, and CHG. Concurrent file movements will create duplicates across the system
@@ -22,23 +29,23 @@ import { makefpmap, makedpmap } from "./ResolvePolicies/ResolvePolicies"
 export default class CargoList {
 	private index: Map<string, Item[]>
 	private indexpath: string
-	private rootpath: string
 	private tablefile: string = "indextable.json"
-	private rsfile: FileResolveMap
-	private rsfilep: Map<string, ResolveOption>
-	private rsdir: DirResolveMap
-	private rsdirp: Map<string, ResolveOption>
-	//private rsfolfer =
-	//private duppolicy = 0 // 0: latest timestamp wins, 1: deterministic rename one
+	private rsfile: Map<string, RL>
+	private rsfilep: Map<string, RO>
+	private rsdir: Map<string, RL>
+	private rsdirp: Map<string, RO>
 
-	constructor(root: string, fileconfig?: FileRPConfig) {
+	constructor(
+		root: string,
+		fileconfig?: FileRPConfig,
+		dirconfig?: DirRPConfig
+	) {
 		this.index = new Map()
-		this.rootpath = root
 		this.indexpath = join(root, this.tablefile)
-		const frs = makefpmap(fileconfig ?? LWWConfig)
+		const frs = makefpmap(fileconfig ?? LWWFileConfig)
 		this.rsfile = frs[0]
 		this.rsfilep = frs[1]
-		const drs = makedpmap(fileconfig ?? LWWConfig)
+		const drs = makedpmap(dirconfig ?? LWWDirConfig)
 		this.rsdir = drs[0]
 		this.rsdirp = drs[1]
 	}
@@ -75,9 +82,9 @@ export default class CargoList {
 	static newItem(
 		path: string,
 		uuid: string,
-		type: ItemTypes,
+		type: IT,
 		ts: number,
-		action: ActionTypes,
+		action: AT,
 		user: string
 	): Item {
 		const item: Item = {
@@ -89,23 +96,8 @@ export default class CargoList {
 			lastActionBy: user,
 			actionId: uuid4(),
 		}
-		if (action === ActionTypes.Remove) item.tomb = { type: TombTypes.Deleted }
+		if (action === AT.Remove) item.tomb = { type: TT.Deleted }
 		return item
-	}
-
-	get(k: string): Item[] | undefined {
-		return this.index.get(k)
-	}
-
-	set(k: string, v: Item[]): void {
-		this.index.set(k, v)
-	}
-
-	/**
-	 * @deprecated Remove soon
-	 */
-	merge(v: Item[]): void {
-		v.forEach(ri => this.apply(ri))
 	}
 
 	// TODO: need testing
@@ -118,20 +110,17 @@ export default class CargoList {
 		this.save()
 	}
 
-	apply(item: Item): boolean {
-		if (item.type === ItemTypes.File) {
-			if (item.lastAction === ActionTypes.Add) return this.applyADDFile(item)
-			if (item.lastAction === ActionTypes.Remove)
-				return this.applyREMOVEFile(item)
-			if (item.lastAction === ActionTypes.Change)
-				return this.applyCHANGEFile(item)
+	apply(item: Item): Resolution[] {
+		if (item.type === IT.File) {
+			if (item.lastAction === AT.Add) return this.applyADDFile(item)
+			if (item.lastAction === AT.Remove) return this.applyREMOVEFile(item)
+			if (item.lastAction === AT.Change) return this.applyCHANGEFile(item)
 		}
-		if (item.lastAction === ActionTypes.Add) return this.applyADDFolder(item)
-		if (item.lastAction === ActionTypes.Remove)
-			return this.applyREMOVEFolder(item)
-		if (item.lastAction === ActionTypes.Change)
+		if (item.lastAction === AT.Add) return this.applyADDFolder(item)
+		if (item.lastAction === AT.Remove) return this.applyREMOVEFolder(item)
+		if (item.lastAction === AT.Change)
 			throw Error("CargoList.apply: illegal argument (folder CHG)")
-		return false
+		return []
 	}
 
 	getLatest(path: string): Item | null {
@@ -142,13 +131,8 @@ export default class CargoList {
 		)
 	}
 
-	private find(item: Item): Item | null {
-		const arr = this.index.get(item.path) // TODO: tombs with MOVED or RENAMED
-		return (
-			arr?.find(n => n.uuid === item.uuid) ?? // matching id
-			arr?.reduce((n1, n2) => (n1.lastModified > n2.lastModified ? n1 : n2)) ?? // latest
-			null
-		)
+	findById(item: Item): Item | null {
+		return this.index.get(item.path)?.find(i => i.uuid === item.uuid) ?? null
 	}
 
 	findbyhash(path: string, hash: string): Item | null {
@@ -161,150 +145,126 @@ export default class CargoList {
 		else itemlist.push(item)
 	}
 
-	private update(newitem: Item, rp: ResolveOption | undefined): void {
-		if (rp === ResolveOption.LWW) {
-			this.set(newitem.path, [newitem])
-			return
+	private update(res: Resolution, ro: RO | undefined): void {
+		switch (ro) {
+			case RO.LWW:
+				this.index.set(res.after.path, [res.after])
+				return
+			case RO.DUP:
+				if (!res.before) return this.push(res.after)
+				const arr = this.index.get(res.after.path)
+				if (!arr) {
+					this.push(res.after)
+					res.before.lastAction = AT.Remove // TODO: change to rename later
+					res.before.tomb = { type: TT.Renamed, movedTo: res.after.path }
+					return
+				}
+				const index = arr.findIndex(i => i.uuid === res.after?.uuid)
+				if (index === -1) arr.push(res.after)
+				else arr[index] = res.after
+				res.before.lastAction = AT.Remove // TODO: change to rename later
+				res.before.tomb = { type: TT.Renamed, movedTo: res.after.path }
+				return
 		}
-		const itemlist = this.index.get(newitem.path)
-		if (!itemlist) return
-		const i = itemlist.findIndex(olditem => olditem.uuid === newitem.uuid)
-		if (i === -1) return
-		itemlist[i] = newitem
 	}
 
-	private applyADDFile(newitem: Item): boolean {
-		if (newitem.path === this.indexpath) return false
-		let olditem = this.find(newitem) // ?? newitem
-		let pushed = false
-
-		if (!olditem) {
-			// remove, include in update
-			this.push(newitem)
-			olditem = newitem
-			pushed = true
-		}
-		if (olditem.lastAction === ActionTypes.Add) {
-			const [item, n] = this.rsfile.addadd(olditem, newitem)
-			this.update(item, this.rsfilep.get("addadd"))
-			return pushed || n === 1
-		}
-		if (olditem.lastAction === ActionTypes.Remove) {
-			const [item, n] = this.rsfile.addrem(olditem, newitem)
-			this.update(item, this.rsfilep.get("addrem"))
-			return pushed || n === 1
-		}
-		if (olditem.lastAction === ActionTypes.Change) {
-			const [item, n] = this.rsfile.addchg(olditem, newitem)
-			this.update(item, this.rsfilep.get("addchg"))
-			return pushed || n === 1
-		}
-		return pushed
+	private getResPol(type: IT, pol: string): [RL, RO] {
+		const rl = (type === IT.File ? this.rsfile : this.rsdir).get(pol)
+		const ro = (type === IT.File ? this.rsfilep : this.rsdirp).get(pol)
+		if (!rl || ro === undefined) throw Error()
+		return [rl, ro]
 	}
 
-	private applyREMOVEFile(newitem: Item): boolean {
-		if (newitem.path === this.indexpath) return false
-		let olditem = this.find(newitem)
-		let pushed = false
-
-		if (!olditem) {
-			this.push(newitem)
-			olditem = newitem
-			pushed = true
+	private resolve(oldi: Item, newi: Item, pol: string): Resolution[] {
+		const [rl, ro] = this.getResPol(oldi.type, pol)
+		if (oldi === newi) {
+			const res = { after: newi, io: false }
+			this.update(res, ro)
+			return [res]
 		}
-		if (olditem.lastAction === ActionTypes.Add) {
-			const [item, n] = this.rsfile.addadd(olditem, newitem)
-			this.update(item, this.rsfilep.get("addrem"))
-			return pushed || n === 1
-		}
-		if (olditem.lastAction === ActionTypes.Remove) {
-			const [item, n] = this.rsfile.addrem(olditem, newitem)
-			this.update(item, this.rsfilep.get("remrem"))
-			return pushed || n === 1
-		}
-		if (olditem.lastAction === ActionTypes.Change) {
-			const [item, n] = this.rsfile.addchg(olditem, newitem)
-			this.update(item, this.rsfilep.get("remchg"))
-			return pushed || n === 1
-		}
-		return false
+		if (ro === RO.DUP) this.push(newi)
+		const resarr = rl(oldi, newi)
+		resarr.forEach(r => this.update(r, ro))
+		return resarr
 	}
 
-	private applyCHANGEFile(newitem: Item): boolean {
-		if (newitem.path === this.indexpath) return false
-		let olditem = this.find(newitem)
-		let pushed = false
+	private applyADDFile(newitem: Item): Resolution[] {
+		if (newitem.path === this.indexpath) return []
+		const olditem = this.getLatest(newitem.path) || newitem
 
-		if (!olditem) {
-			this.push(newitem)
-			olditem = newitem
-			pushed = true
+		switch (olditem.lastAction) {
+			case AT.Add:
+				return this.resolve(olditem, newitem, "addadd")
+			case AT.Remove:
+				return this.resolve(olditem, newitem, "addrem")
+			case AT.Change:
+				return this.resolve(olditem, newitem, "addchg")
+			default:
+				return []
 		}
-		if (olditem.lastAction === ActionTypes.Add) {
-			const [item, n] = this.rsfile.addadd(olditem, newitem)
-			this.update(item, this.rsfilep.get("addchg"))
-			return pushed || n === 1
-		}
-		if (olditem.lastAction === ActionTypes.Remove) {
-			const [item, n] = this.rsfile.addrem(olditem, newitem)
-			this.update(item, this.rsfilep.get("remchg"))
-			return pushed || n === 1
-		}
-		if (olditem.lastAction === ActionTypes.Change) {
-			const [item, n] = this.rsfile.addchg(olditem, newitem)
-			this.update(item, this.rsfilep.get("chgchg"))
-			return pushed || n === 1
-		}
-		return false
 	}
 
-	private applyADDFolder(newitem: Item): boolean {
-		if (newitem.path === this.indexpath) return false
-		let olditem = this.find(newitem) // TODO get back to it later
-		let pushed = false
+	private applyREMOVEFile(newitem: Item): Resolution[] {
+		if (newitem.path === this.indexpath) return []
+		const olditem = this.getLatest(newitem.path) || newitem
 
-		if (!olditem) {
-			this.push(newitem)
-			olditem = newitem
-			pushed = true
+		switch (olditem.lastAction) {
+			case AT.Add:
+				return this.resolve(olditem, newitem, "addrem")
+			case AT.Remove:
+				return this.resolve(olditem, newitem, "remrem")
+			case AT.Change:
+				return this.resolve(olditem, newitem, "remchg")
+			default:
+				return []
 		}
-		if (olditem.lastAction === ActionTypes.Add) {
-			const [item, n] = this.rsdir.addadd(olditem, newitem)
-			this.update(item, this.rsdirp.get("addadd"))
-			return pushed || n === 1
-		}
-		if (olditem.lastAction === ActionTypes.Remove) {
-			const [item, n] = this.rsdir.addrem(olditem, newitem)
-			this.update(item, this.rsdirp.get("addrem"))
-			return pushed || n === 1
-		}
-		if (olditem.lastAction === ActionTypes.Change)
-			throw Error("CargoList.applyADDFolder: olditem.lastAction === CHG")
-		return false
 	}
 
-	private applyREMOVEFolder(newitem: Item): boolean {
-		if (newitem.path === this.indexpath) return false
-		let olditem = this.find(newitem)
-		let pushed = false
+	private applyCHANGEFile(newitem: Item): Resolution[] {
+		if (newitem.path === this.indexpath) return []
+		const olditem = this.getLatest(newitem.path) || newitem
 
-		if (!olditem) {
-			this.push(newitem)
-			olditem = newitem
-			pushed = true
+		switch (olditem.lastAction) {
+			case AT.Add:
+				return this.resolve(olditem, newitem, "addchg")
+			case AT.Remove:
+				return this.resolve(olditem, newitem, "remchg")
+			case AT.Change:
+				return this.resolve(olditem, newitem, "chgchg")
+			default:
+				return []
 		}
-		if (olditem.lastAction === ActionTypes.Add) {
-			const [item, n] = this.rsdir.addrem(olditem, newitem)
-			this.update(item, this.rsdirp.get("addrem"))
-			return pushed || n === 1
+	}
+
+	private applyADDFolder(newitem: Item): Resolution[] {
+		if (newitem.path === this.indexpath) return []
+		const olditem = this.getLatest(newitem.path) || newitem
+
+		switch (olditem.lastAction) {
+			case AT.Add:
+				return this.resolve(olditem, newitem, "addadd")
+			case AT.Remove:
+				return this.resolve(olditem, newitem, "addrem")
+			case AT.Change:
+				throw Error("CargoList.applyADDFolder: olditem.lastAction === CHG")
+			default:
+				return []
 		}
-		if (olditem.lastAction === ActionTypes.Remove) {
-			const [item, n] = this.rsdir.remrem(olditem, newitem)
-			this.update(item, this.rsdirp.get("remrem"))
-			return pushed || n === 1
+	}
+
+	private applyREMOVEFolder(newitem: Item): Resolution[] {
+		if (newitem.path === this.indexpath) return []
+		const olditem = this.getLatest(newitem.path) || newitem
+
+		switch (olditem.lastAction) {
+			case AT.Add:
+				return this.resolve(olditem, newitem, "addrem")
+			case AT.Remove:
+				return this.resolve(olditem, newitem, "remrem")
+			case AT.Change:
+				throw Error("CargoList.applyREMOVEFolder: olditem.lastAction === CHG")
+			default:
+				return []
 		}
-		if (olditem.lastAction === ActionTypes.Change)
-			throw Error("CargoList.applyREMOVEFolder: olditem.lastAction === CHG")
-		return false
 	}
 }

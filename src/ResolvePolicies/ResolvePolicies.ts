@@ -1,11 +1,5 @@
 import { ResolveOption } from "../enums"
-import {
-	ResolveLogic,
-	FileRPConfig,
-	FileResolveMap,
-	DirResolveMap,
-	DirRPConfig,
-} from "../interfaces"
+import { ResolveLogic, FileRPConfig, DirRPConfig } from "../interfaces"
 import rp from "./resolves"
 
 function assign(key: string, i: number): ResolveLogic {
@@ -16,40 +10,38 @@ function assign(key: string, i: number): ResolveLogic {
 
 export function makefpmap(
 	config: FileRPConfig
-): [FileResolveMap, Map<string, ResolveOption>] {
-	const frm = {
-		addadd: assign("addadd", config.addadd),
-		addrem: assign("addrem", config.addrem),
-		addchg: assign("addchg", config.addrem),
-		remrem: assign("remrem", config.addrem),
-		remchg: assign("remchg", config.addrem),
-		chgchg: assign("chgchg", config.addrem),
-	}
+): [Map<string, ResolveLogic>, Map<string, ResolveOption>] {
+	const frm = new Map<string, ResolveLogic>()
+		.set("addadd", assign("addadd", config.addadd))
+		.set("addrem", assign("addrem", config.addrem))
+		.set("addchg", assign("addchg", config.addchg))
+		.set("remrem", assign("remrem", config.remrem))
+		.set("remchg", assign("remchg", config.remchg))
+		.set("chgchg", assign("chgchg", config.chgchg))
 
 	const fr = new Map<string, ResolveOption>()
 		.set("addadd", config.addadd)
 		.set("addrem", config.addrem)
-		.set("addchg", config.addrem)
-		.set("remrem", config.addrem)
-		.set("remchg", config.addrem)
-		.set("chgchg", config.addrem)
+		.set("addchg", config.addchg)
+		.set("remrem", config.remrem)
+		.set("remchg", config.remchg)
+		.set("chgchg", config.chgchg)
 
 	return [frm, fr]
 }
 
 export function makedpmap(
 	config: DirRPConfig
-): [DirResolveMap, Map<string, ResolveOption>] {
-	const frm = {
-		addadd: assign("addadd", config.addadd),
-		addrem: assign("addrem", config.addrem),
-		remrem: assign("remrem", config.addrem),
-	}
+): [Map<string, ResolveLogic>, Map<string, ResolveOption>] {
+	const drm = new Map<string, ResolveLogic>()
+		.set("addadd", assign("addadd", config.addadd))
+		.set("addrem", assign("addrem", config.addrem))
+		.set("remrem", assign("remrem", config.remrem))
 
-	const fr = new Map<string, ResolveOption>()
+	const dr = new Map<string, ResolveOption>()
 		.set("addadd", config.addadd)
 		.set("addrem", config.addrem)
-		.set("remrem", config.addrem)
+		.set("remrem", config.remrem)
 
-	return [frm, fr]
+	return [drm, dr]
 }

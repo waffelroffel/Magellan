@@ -1,5 +1,6 @@
-import { extname, join } from "path"
-import { Item, ResolveLogic } from "../interfaces"
+import { extname } from "path"
+import { Item, Resolution, ResolveLogic } from "../interfaces"
+import { deepcopy } from "../utils"
 
 function comp(i1: Item, i2: Item): boolean {
 	return i1.lastModified !== i2.lastModified
@@ -7,20 +8,32 @@ function comp(i1: Item, i2: Item): boolean {
 		: i1.lastActionBy < i2.lastActionBy
 }
 
-function lww(i1: Item, i2: Item): [Item, number] {
-	return comp(i1, i2) ? [i2, 1] : [i1, 0]
+function lww(i1: Item, i2: Item): Resolution[] {
+	if (comp(i1, i2)) return [{ after: i2, io: true }]
+	return [{ after: i1, io: false }]
 }
 
-function dup(i1: Item, i2: Item): [Item, number] {
-	return comp(i1, i2) ? [insertname(i2), 1] : [insertname(i1), 0]
+function dup(i1: Item, i2: Item): Resolution[] {
+	const cond = comp(i1, i2)
+	const changed = newname(deepcopy(cond ? i2 : i1))
+	const res1 = {
+		before: i1,
+		after: !cond ? changed : i1,
+		io: !cond,
+	}
+	const res2 = {
+		before: i2,
+		after: cond ? changed : i2,
+		io: cond,
+	}
+	return [res1, res2]
 }
 
-function insertname(i: Item): Item {
-	i.path = join(
-		i.path.substring(0, i.path.lastIndexOf(".")),
-		i.lastActionBy,
-		extname(i.path)
-	)
+function newname(i: Item): Item {
+	const name = i.path.substring(0, i.path.lastIndexOf("."))
+	const user = i.lastActionBy
+	const ext = extname(i.path)
+	i.path = `${name} - (${user})${ext}`
 	return i
 }
 

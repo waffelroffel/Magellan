@@ -12,7 +12,7 @@ import { join, sep } from "path"
 import { v4 as uuid4 } from "uuid"
 import { ABCVessel } from "./Proxies/ABCVessel"
 import CargoList from "./CargoList"
-import { ItemTypes, ActionTypes, Medium, TombTypes } from "./enums"
+import { ItemType as IT, ActionType as AT, Medium } from "./enums"
 import { Item, NID, IndexArray, Streamable } from "./interfaces"
 import NetworkInterface from "./NetworkInterface"
 import { cts, ct, computehash } from "./utils"
@@ -89,22 +89,14 @@ export default class Vessel extends ABCVessel {
 
 	private setupEvents() {
 		this.watcher
-			.on("add", (path: string) =>
-				this.applyLocal(path, ItemTypes.File, ActionTypes.Add)
-			)
-			.on("change", (path: string) =>
-				this.applyLocal(path, ItemTypes.File, ActionTypes.Change)
-			)
-			.on("unlink", (path: string) =>
-				this.applyLocal(path, ItemTypes.File, ActionTypes.Remove)
-			)
-			.on("addDir", (path: string) =>
-				this.applyLocal(path, ItemTypes.Folder, ActionTypes.Add)
-			)
+			.on("add", (path: string) => this.applyLocal(path, IT.File, AT.Add))
+			.on("change", (path: string) => this.applyLocal(path, IT.File, AT.Change))
+			.on("unlink", (path: string) => this.applyLocal(path, IT.File, AT.Remove))
+			.on("addDir", (path: string) => this.applyLocal(path, IT.Folder, AT.Add))
 			.on("unlinkDir", (path: string) => {
 				const patharr = path.split(sep)
 				if (this.rootarr.some((p, i) => p !== patharr[i])) return // when deleting folder with files, full path is returned
-				this.applyLocal(path, ItemTypes.Folder, ActionTypes.Remove)
+				this.applyLocal(path, IT.Folder, AT.Remove)
 			}) // TODO: error when deleting folder with folders due to order of deletion parent->child
 			.on("error", this.logger) // TODO: when empty folder gets deleted throws error
 			.on("ready", () => {
@@ -115,7 +107,7 @@ export default class Vessel extends ABCVessel {
 			})
 	}
 
-	private applyLocal(path: string, type: ItemTypes, action: ActionTypes) {
+	private applyLocal(path: string, type: IT, action: AT) {
 		if (this.skiplist.delete(path)) return
 		if ([this.root, this.tablePath].includes(path)) return
 
@@ -132,21 +124,22 @@ export default class Vessel extends ABCVessel {
 		item.uuid = latest?.uuid ?? item.uuid // TODO: need to apply the latest item to preserve uuid and hash
 		item.hash = latest?.hash ?? item.hash // TODO: check
 
-		if (type === ItemTypes.File && action === ActionTypes.Remove) {
+		if (type === IT.File && action === AT.Remove) {
 			const newpath = this.localtempfilehashes.get(item.hash ?? "") ?? "" //TODO
 
 			//if (newpath) item.tomb = { type: TombTypes.Moved, movedTo: newpath }
 
 			this.localtempfilehashes.delete(item.hash ?? "")
-		} else if (
-			type === ItemTypes.File &&
-			(action === ActionTypes.Add || action === ActionTypes.Change)
-		)
+		} else if (type === IT.File && (action === AT.Add || action === AT.Change))
 			item.hash = computehash(path)
 
 		//this.log.push(item, this.user)
 		const applied = this.index.apply(item)
-		this.logger(action, path, applied)
+		this.logger(
+			action,
+			path,
+			applied.map(r => r.io)
+		)
 		if (/*!applied ||*/ this.init) return
 
 		this.localtempfilehashes.set(item.hash ?? "", item.path) // TODO
@@ -156,21 +149,26 @@ export default class Vessel extends ABCVessel {
 
 	applyIncoming(item: Item, rs?: Streamable): void {
 		const applied = this.index.apply(item)
-		this.logger("REMOTE", item.lastAction, item.path, applied)
+		this.logger(
+			"REMOTE",
+			item.lastAction,
+			item.path,
+			applied.map(r => r.io)
+		)
 		if (!applied) return
 
 		const full = join(this.root, item.path)
-		if (item.type === ItemTypes.Folder) this.applyFolderIO(item, full)
-		else if (item.type === ItemTypes.File) this.applyFileIO(item, full, rs)
+		if (item.type === IT.Folder) this.applyFolderIO(item, full)
+		else if (item.type === IT.File) this.applyFileIO(item, full, rs)
 
 		this.index.save()
 	}
 
 	private applyFolderIO(item: Item, fullpath: string): void {
-		if (item.lastAction === ActionTypes.Remove && existsSync(fullpath)) {
+		if (item.lastAction === AT.Remove && existsSync(fullpath)) {
 			this.skiplist.add(fullpath)
 			rmdirSync(fullpath, { recursive: true })
-		} else if (item.lastAction === ActionTypes.Add && !existsSync(fullpath)) {
+		} else if (item.lastAction === AT.Add && !existsSync(fullpath)) {
 			this.skiplist.add(fullpath)
 			mkdirSync(fullpath, { recursive: true })
 		} else console.log("Illegal io op:", item.lastAction, fullpath)
@@ -178,7 +176,7 @@ export default class Vessel extends ABCVessel {
 	}
 
 	private applyFileIO(item: Item, fullpath: string, rs?: Streamable) {
-		if (item.lastAction === ActionTypes.Remove && existsSync(fullpath)) {
+		if (item.lastAction === AT.Remove && existsSync(fullpath)) {
 			this.skiplist.add(fullpath)
 			rmSync(fullpath)
 		} else {
@@ -188,8 +186,7 @@ export default class Vessel extends ABCVessel {
 	}
 
 	createRS(item: Item): Streamable {
-		if (item.type === ItemTypes.Folder) return null
-		if (item.lastAction === ActionTypes.Remove) return null
+		if (item.type === IT.Folder || item.lastAction === AT.Remove) return null
 		this.logger("createRS", item.path)
 		return createReadStream(join(this.root, item.path))
 	}
@@ -233,8 +230,8 @@ export default class Vessel extends ABCVessel {
 			proxy.fetch(items).forEach((pr, i) => {
 				const item = items[i]
 				const full = join(this.root, item.path)
-				if (item.type === ItemTypes.Folder) this.applyFolderIO(item, full)
-				else if (item.type === ItemTypes.File)
+				if (item.type === IT.Folder) this.applyFolderIO(item, full)
+				else if (item.type === IT.File)
 					Promise.resolve(pr).then(rs => this.applyFileIO(item, full, rs))
 			})
 			this.index.save()

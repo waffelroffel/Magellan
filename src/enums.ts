@@ -1,32 +1,32 @@
 // ---------------- CARGOLIST ----------------
-export const enum ItemTypes {
+export const enum ItemType {
 	Folder,
 	File,
 }
 
-const ITEM_TYPES = [ItemTypes.Folder, ItemTypes.File]
+const ITEM_TYPES = [ItemType.Folder, ItemType.File]
 
-export const toItemType = (value: string): ItemTypes => {
+export const toItemType = (value: string): ItemType => {
 	const type = ITEM_TYPES.find(it => it.toString() === value)
 	if (type === undefined) throw Error("toItemType: invalid type")
 	return type
 }
 
-export const enum TombTypes {
+export const enum TombType {
 	Moved,
 	Renamed,
 	Deleted,
 }
 
-const TOMB_TYPES = [TombTypes.Moved, TombTypes.Renamed, TombTypes.Deleted]
+const TOMB_TYPES = [TombType.Moved, TombType.Renamed, TombType.Deleted]
 
-export const toTombTypes = (value: string): TombTypes => {
+export const toTombTypes = (value: string): TombType => {
 	const tomb = TOMB_TYPES.find(tt => tt.toString() === value)
 	if (tomb === undefined) throw Error("toTombTypes: invalid type")
 	return tomb
 }
 
-export const enum ActionTypes {
+export const enum ActionType {
 	Add = "ADD",
 	Remove = "REM",
 	Move = "MOV",
@@ -35,14 +35,14 @@ export const enum ActionTypes {
 }
 
 const ACTION_TYPES = [
-	ActionTypes.Add,
-	ActionTypes.Remove,
-	ActionTypes.Move,
-	ActionTypes.Change,
-	ActionTypes.Rename,
+	ActionType.Add,
+	ActionType.Remove,
+	ActionType.Move,
+	ActionType.Change,
+	ActionType.Rename,
 ]
 
-export const toActionType = (value: string): ActionTypes => {
+export const toActionType = (value: string): ActionType => {
 	const action = ACTION_TYPES.find(at => at === value)
 	if (action === undefined) throw Error("toActionType: invalid type")
 	return action
