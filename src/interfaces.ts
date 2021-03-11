@@ -55,6 +55,8 @@ export interface Resolution {
 	before?: Item
 	after: Item
 	io: boolean
+	ro: ResolveOption
+	same?: boolean
 }
 
 export type ResolveLogic = (item1: Item, item2: Item) => Resolution[]

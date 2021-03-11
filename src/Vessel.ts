@@ -12,7 +12,12 @@ import { join, sep } from "path"
 import { v4 as uuid4 } from "uuid"
 import { ABCVessel } from "./Proxies/ABCVessel"
 import CargoList from "./CargoList"
-import { ItemType as IT, ActionType as AT, Medium } from "./enums"
+import {
+	ItemType as IT,
+	ActionType as AT,
+	Medium,
+	ResolveOption as RO,
+} from "./enums"
 import { Item, NID, IndexArray, Streamable } from "./interfaces"
 import NetworkInterface from "./NetworkInterface"
 import { cts, ct, computehash } from "./utils"
@@ -41,6 +46,7 @@ export default class Vessel extends ABCVessel {
 	skiplist = new Set<string>()
 	//log = new Log()
 	init = true
+	skip = false
 	networkinterface = new NetworkInterface()
 	server: VesselServer
 
@@ -69,12 +75,16 @@ export default class Vessel extends ABCVessel {
 	}
 
 	rejoin(): Vessel {
-		this.index.mergewithlocal()
+		this.skip = true
+		this.index.mergewithlocal() // Assuming no changes when process is not running  // TODO: add file checking
 		this.server.listen()
 		return this
 	}
 
-	startnew() {}
+	startnew(): Vessel {
+		this.server.listen()
+		return this
+	}
 
 	load() {}
 	save() {}
@@ -101,6 +111,7 @@ export default class Vessel extends ABCVessel {
 			.on("error", this.logger) // TODO: when empty folder gets deleted throws error
 			.on("ready", () => {
 				this.init = false
+				this.skip = false
 				this.index.save()
 				this.logger("PLVS VLTRA!")
 				//this.logger(this.log.history)
@@ -108,7 +119,7 @@ export default class Vessel extends ABCVessel {
 	}
 
 	private applyLocal(path: string, type: IT, action: AT) {
-		if (this.skiplist.delete(path)) return
+		if (this.skiplist.delete(path) || this.skip) return
 		if ([this.root, this.tablePath].includes(path)) return
 
 		const item = CargoList.newItem(
@@ -155,7 +166,7 @@ export default class Vessel extends ABCVessel {
 			item.path,
 			applied.map(r => r.io)
 		)
-		if (!applied) return
+		if (applied[0].ro === RO.LWW && !applied[0].io) return
 
 		const full = join(this.root, item.path)
 		if (item.type === IT.Folder) this.applyFolderIO(item, full)
@@ -225,7 +236,19 @@ export default class Vessel extends ABCVessel {
 		this.logger("UPDATING")
 
 		Promise.resolve(data).then(arr => {
-			const items = arr.flatMap(kv => kv[1]).filter(i => this.index.apply(i))
+			const items = arr
+				.flatMap(kv => kv[1])
+				.map(i => {
+					const ress = this.index.apply(i)
+					if (ress.length !== 1) throw Error()
+					return ress[0]
+				})
+				.filter(res => {
+					const same = res.same
+					if (same === undefined) return true
+					return !same && res.io
+				})
+				.map(res => res.after) // TODO: clean
 
 			proxy.fetch(items).forEach((pr, i) => {
 				const item = items[i]

@@ -1,4 +1,5 @@
 import { extname } from "path"
+import { ResolveOption as RO } from "../enums"
 import { Item, Resolution, ResolveLogic } from "../interfaces"
 import { deepcopy } from "../utils"
 
@@ -9,8 +10,10 @@ function comp(i1: Item, i2: Item): boolean {
 }
 
 function lww(i1: Item, i2: Item): Resolution[] {
-	if (comp(i1, i2)) return [{ after: i2, io: true }]
-	return [{ after: i1, io: false }]
+	const same =
+		i1.lastModified === i2.lastModified && i1.actionId === i2.actionId
+	if (comp(i1, i2)) return [{ after: i2, io: true, ro: RO.LWW, same }]
+	return [{ after: i1, io: false, ro: RO.LWW, same }]
 }
 
 function dup(i1: Item, i2: Item): Resolution[] {
@@ -20,11 +23,13 @@ function dup(i1: Item, i2: Item): Resolution[] {
 		before: i1,
 		after: !cond ? changed : i1,
 		io: !cond,
+		ro: RO.DUP,
 	}
 	const res2 = {
 		before: i2,
 		after: cond ? changed : i2,
 		io: cond,
+		ro: RO.DUP,
 	}
 	return [res1, res2]
 }

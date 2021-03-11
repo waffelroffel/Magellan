@@ -6,8 +6,8 @@ import { compFiles, isDeepEqual } from "./utils.test"
 const daveroot = join("testroot", "dave")
 const evanroot = join("testroot", "evan")
 
-const dave = new Vessel("dave", daveroot).rejoin()
-const evan = new Vessel("evan", evanroot).rejoin()
+const dave = new Vessel("dave", daveroot).startnew()
+const evan = new Vessel("evan", evanroot).startnew()
 
 setTimeout(() => {
 	console.log("Pre index equal: ", isDeepEqual(dave.index, evan.index))

@@ -102,7 +102,8 @@ export default class CargoList {
 
 	// TODO: need testing
 	mergewithlocal(): void {
-		if (!existsSync(this.indexpath)) return
+		if (!existsSync(this.indexpath))
+			throw Error(`CargoList.mergewithlocal: ${this.indexpath} doesn't exist`)
 		const oldindex = JSON.parse(
 			readFileSync(this.indexpath, { encoding: "utf8" })
 		) as IndexArray
@@ -179,7 +180,7 @@ export default class CargoList {
 	private resolve(oldi: Item, newi: Item, pol: string): Resolution[] {
 		const [rl, ro] = this.getResPol(oldi.type, pol)
 		if (oldi === newi) {
-			const res = { after: newi, io: false }
+			const res = { after: newi, io: false, ro }
 			this.update(res, ro)
 			return [res]
 		}
