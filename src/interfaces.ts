@@ -2,6 +2,7 @@ import { Socket } from "net"
 import { ReadStream } from "fs"
 import { TombType, ItemType, ActionType, ResolveOption } from "./enums"
 import { IncomingMessage } from "http"
+import Vessel from "./Vessel"
 
 // ---------------- CARGOLIST ----------------
 export interface Tomb {
@@ -49,6 +50,11 @@ export type Streamable =
 	| null
 	| IncomingMessage
 	| NodeJS.ReadableStream // TODO: workaround null
+
+export interface ProxyOption {
+	vessel?: Vessel
+	nid?: NID
+}
 
 // ---------------- RESOLVES ----------------
 export interface Resolution {

@@ -145,28 +145,28 @@ export default class Vessel extends ABCVessel {
 			item.hash = computehash(path)
 
 		//this.log.push(item, this.user)
-		const applied = this.index.apply(item)
+		const ress = this.index.apply(item)
 		this.logger(
 			action,
 			path,
-			applied.map(r => r.io)
+			ress.map(r => r.io)
 		)
-		if (/*!applied ||*/ this.init) return
+		if (this.init) return
 
-		this.localtempfilehashes.set(item.hash ?? "", item.path) // TODO
+		// this.localtempfilehashes.set(item.hash ?? "", item.path) // TODO
 		this.index.save()
 		this.networkinterface.broadcast(item, this.createRS(item))
 	}
 
-	applyIncoming(item: Item, rs?: Streamable): void {
-		const applied = this.index.apply(item)
+	applyIncoming(item: Item, rs?: NodeJS.ReadableStream): void {
+		const ress = this.index.apply(item)
 		this.logger(
 			"REMOTE",
 			item.lastAction,
 			item.path,
-			applied.map(r => r.io)
+			ress.map(r => r.io)
 		)
-		if (applied[0].ro === RO.LWW && !applied[0].io) return
+		if (ress[0].ro === RO.LWW && !ress[0].io) return
 
 		const full = join(this.root, item.path)
 		if (item.type === IT.Folder) this.applyFolderIO(item, full)
@@ -202,16 +202,6 @@ export default class Vessel extends ABCVessel {
 		return createReadStream(join(this.root, item.path))
 	}
 
-	/*
-	getProxies(): string {
-		const proxies = this.networkinterface.network
-			.filter(p => p instanceof HTTPProxy)
-			.map(
-				p => p instanceof HTTPProxy && [p.id, { host: p.host, port: p.port }]
-			)
-		return JSON.stringify(proxies)
-	}*/
-
 	addVessel(type: Medium, data: { vessel?: Vessel; nid?: NID }): void {
 		const proxy = this.networkinterface.addNode(type, data)
 		if (!(proxy instanceof LocalProxy || proxy instanceof HTTPProxy))
@@ -220,13 +210,6 @@ export default class Vessel extends ABCVessel {
 		Promise.resolve(proxy.fetchIndex()).then(index =>
 			this.updateCargo(index, proxy)
 		)
-
-		/*
-		Promise.resolve(proxy.getProxies()).then(proxies => {
-			console.log(proxies)
-			// TODO:
-		})
-		*/
 	}
 
 	private updateCargo(

@@ -3,6 +3,7 @@ import { join } from "path"
 import CargoList from "../src/CargoList"
 import { Item, Tomb } from "../src/interfaces"
 import { computehash } from "../src/utils"
+import Vessel from "../src/Vessel"
 
 export function compFiles(root1: string, root2: string): boolean {
 	const [ds1, fs1] = getAllFiles(root1)
@@ -88,4 +89,20 @@ function equalTomb(t1: Tomb, t2: Tomb): boolean {
 	if (t1.type !== t2.type) return false
 	if (t1.movedTo !== t2.movedTo) return false
 	return true
+}
+
+export function assert_index_and_files(
+	vessels: Vessel[],
+	roots: string[],
+	timeout: number,
+	prefix: string
+): void {
+	setTimeout(() => {
+		console.log(
+			prefix,
+			"index equal:",
+			isDeepEqual(vessels[0].index, vessels[1].index)
+		)
+		console.log(prefix, "files equal:", compFiles(roots[0], roots[1]))
+	}, timeout)
 }

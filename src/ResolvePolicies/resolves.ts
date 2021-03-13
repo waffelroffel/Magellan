@@ -42,10 +42,9 @@ function newname(i: Item): Item {
 	return i
 }
 
-const addaddlww: ResolveLogic = (item1, item2) => lww(item1, item2)
+const addaddlww: ResolveLogic = lww
 
-// TODO
-const addadddup: ResolveLogic = (item1, item2) => dup(item1, item2)
+const addadddup: ResolveLogic = dup
 
 const addremlww: ResolveLogic = addaddlww
 

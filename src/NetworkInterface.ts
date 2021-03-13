@@ -1,5 +1,5 @@
 import { Medium } from "./enums"
-import { NID, Item, Streamable } from "./interfaces"
+import { NID, Item, Streamable, ProxyOption } from "./interfaces"
 import LocalProxy from "./Proxies/LocalProxy"
 import Vessel from "./Vessel"
 import Proxy from "./Proxies/Proxy"
@@ -17,17 +17,14 @@ export default class NetworkInterface {
 		return { host: "localhost", port: 8000 + Math.floor(Math.random() * 888) }
 	}
 
-	addNode(type: Medium, data: { vessel?: Vessel; nid?: NID }): Proxy {
+	addNode(type: Medium, data: ProxyOption): Proxy {
 		const proxy = this.createProxy(type, data)
 		if (!proxy) throw Error("NetworkInterface.addNode: null from createProxy")
 		this.network.push(proxy)
 		return proxy
 	}
 
-	private createProxy(
-		type: Medium,
-		data: { vessel?: Vessel; nid?: NID }
-	): Proxy | null {
+	private createProxy(type: Medium, data: ProxyOption): Proxy | null {
 		switch (type) {
 			case Medium.local:
 				return data.vessel ? new LocalProxy(data.vessel) : null
