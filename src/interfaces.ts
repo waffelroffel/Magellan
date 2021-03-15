@@ -49,7 +49,7 @@ export type Streamable =
 	| Socket
 	| null
 	| IncomingMessage
-	| NodeJS.ReadableStream // TODO: workaround null
+	| NodeJS.ReadableStream
 
 export interface ProxyOption {
 	vessel?: Vessel
@@ -63,6 +63,7 @@ export interface Resolution {
 	io: boolean
 	ro: ResolveOption
 	same?: boolean
+	new?: boolean
 }
 
 export type ResolveLogic = (item1: Item, item2: Item) => Resolution[]

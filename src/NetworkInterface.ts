@@ -42,11 +42,4 @@ export default class NetworkInterface {
 	broadcast(item: Item, rs: Streamable): void {
 		this.network.forEach(p => p.send(item, rs))
 	}
-
-	/*
-	requestItems(src: NID, dst: ABCVessel, items: Item[]): Streamable[] | null {
-		const proxy = this.network.find(p => p === dst)
-		return proxy?.fetch(items, src) ?? null
-	}
-	*/
 }

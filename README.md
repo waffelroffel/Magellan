@@ -9,6 +9,7 @@ npm i
 ## Testing
 
 ```
-ts-node testing\setup_std_env.test.ts
-ts-node testing\test_run.test.ts
+ts-node testing/initial_sync.test.ts
 ```
+
+Change, Add, or Delete files in testroot/

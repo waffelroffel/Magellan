@@ -17,7 +17,6 @@ import {
 import { LWWDirConfig, LWWFileConfig } from "./ResolvePolicies/defaultconfigs"
 import { makefpmap, makedpmap } from "./ResolvePolicies/ResolvePolicies"
 import { Resolution } from "./interfaces"
-import { ct } from "./utils"
 
 /**
  * Simple-LWW: all operations are ADD, REM, and CHG. Concurrent file movements will create duplicates across the system
@@ -100,7 +99,6 @@ export default class CargoList {
 		return item
 	}
 
-	// TODO: need testing
 	mergewithlocal(): void {
 		if (!existsSync(this.indexpath))
 			throw Error(`CargoList.mergewithlocal: ${this.indexpath} doesn't exist`)
@@ -146,7 +144,7 @@ export default class CargoList {
 		else itemlist.push(item)
 	}
 
-	private update(res: Resolution, ro: RO | undefined): void {
+	private update(res: Resolution, ro?: RO): void {
 		switch (ro) {
 			case RO.LWW:
 				this.index.set(res.after.path, [res.after])
@@ -160,7 +158,7 @@ export default class CargoList {
 					res.before.tomb = { type: TT.Renamed, movedTo: res.after.path }
 					return
 				}
-				const index = arr.findIndex(i => i.uuid === res.after?.uuid)
+				const index = arr.findIndex(i => i.uuid === res.after.uuid)
 				if (index === -1) arr.push(res.after)
 				else arr[index] = res.after
 				res.before.lastAction = AT.Remove // TODO: change to rename later
@@ -180,7 +178,7 @@ export default class CargoList {
 	private resolve(oldi: Item, newi: Item, pol: string): Resolution[] {
 		const [rl, ro] = this.getResPol(oldi.type, pol)
 		if (oldi === newi) {
-			const res = { after: newi, io: false, ro }
+			const res = { after: newi, io: false, ro, new: true }
 			this.update(res, ro)
 			return [res]
 		}

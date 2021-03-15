@@ -146,11 +146,7 @@ export default class Vessel extends ABCVessel {
 
 		//this.log.push(item, this.user)
 		const ress = this.index.apply(item)
-		this.logger(
-			action,
-			path,
-			ress.map(r => r.io)
-		)
+		this.logger(action, path)
 		if (this.init) return
 
 		// this.localtempfilehashes.set(item.hash ?? "", item.path) // TODO
@@ -160,13 +156,8 @@ export default class Vessel extends ABCVessel {
 
 	applyIncoming(item: Item, rs?: NodeJS.ReadableStream): void {
 		const ress = this.index.apply(item)
-		this.logger(
-			"REMOTE",
-			item.lastAction,
-			item.path,
-			ress.map(r => r.io)
-		)
-		if (ress[0].ro === RO.LWW && !ress[0].io) return
+		this.logger("REMOTE", item.lastAction, item.path)
+		if (!ress[0].new && ress[0].ro === RO.LWW && !ress[0].io) return
 
 		const full = join(this.root, item.path)
 		if (item.type === IT.Folder) this.applyFolderIO(item, full)
@@ -182,7 +173,7 @@ export default class Vessel extends ABCVessel {
 		} else if (item.lastAction === AT.Add && !existsSync(fullpath)) {
 			this.skiplist.add(fullpath)
 			mkdirSync(fullpath, { recursive: true })
-		} else console.log("Illegal io op:", item.lastAction, fullpath)
+		} //else console.log("Illegal io op:", item.lastAction, fullpath)
 		//throw Error("Vessel.applyFolderIO: illegal argument")
 	}
 
@@ -196,7 +187,7 @@ export default class Vessel extends ABCVessel {
 		}
 	}
 
-	createRS(item: Item): Streamable {
+	createRS(item: Item): NodeJS.ReadableStream | null {
 		if (item.type === IT.Folder || item.lastAction === AT.Remove) return null
 		this.logger("createRS", item.path)
 		return createReadStream(join(this.root, item.path))
@@ -226,11 +217,7 @@ export default class Vessel extends ABCVessel {
 					if (ress.length !== 1) throw Error()
 					return ress[0]
 				})
-				.filter(res => {
-					const same = res.same
-					if (same === undefined) return true
-					return !same && res.io
-				})
+				.filter(res => (res.same === undefined ? true : !res.same && res.io))
 				.map(res => res.after) // TODO: clean
 
 			proxy.fetch(items).forEach((pr, i) => {

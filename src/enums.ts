@@ -48,8 +48,6 @@ export const toActionType = (value: string): ActionType => {
 	return action
 }
 
-//export type Resolution = [boolean, string, () => {}]
-
 // ---------------- NETWORK ----------------
 export const enum Medium {
 	http,
@@ -58,7 +56,6 @@ export const enum Medium {
 }
 
 // ---------------- RESOLVES ----------------
-//TODO clean values
 export const enum ResolveOption {
 	LWW,
 	DUP,
