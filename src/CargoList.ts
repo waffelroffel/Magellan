@@ -110,6 +110,7 @@ export default class CargoList {
 	}
 
 	apply(item: Item): Resolution[] {
+		if (item.path === this.indexpath) return []
 		if (item.type === IT.File) {
 			if (item.lastAction === AT.Add) return this.applyADDFile(item)
 			if (item.lastAction === AT.Remove) return this.applyREMOVEFile(item)
@@ -189,7 +190,6 @@ export default class CargoList {
 	}
 
 	private applyADDFile(newitem: Item): Resolution[] {
-		if (newitem.path === this.indexpath) return []
 		const olditem = this.getLatest(newitem.path) || newitem
 
 		switch (olditem.lastAction) {
@@ -205,7 +205,6 @@ export default class CargoList {
 	}
 
 	private applyREMOVEFile(newitem: Item): Resolution[] {
-		if (newitem.path === this.indexpath) return []
 		const olditem = this.getLatest(newitem.path) || newitem
 
 		switch (olditem.lastAction) {
@@ -221,7 +220,6 @@ export default class CargoList {
 	}
 
 	private applyCHANGEFile(newitem: Item): Resolution[] {
-		if (newitem.path === this.indexpath) return []
 		const olditem = this.getLatest(newitem.path) || newitem
 
 		switch (olditem.lastAction) {
@@ -237,7 +235,6 @@ export default class CargoList {
 	}
 
 	private applyADDFolder(newitem: Item): Resolution[] {
-		if (newitem.path === this.indexpath) return []
 		const olditem = this.getLatest(newitem.path) || newitem
 
 		switch (olditem.lastAction) {
@@ -253,7 +250,6 @@ export default class CargoList {
 	}
 
 	private applyREMOVEFolder(newitem: Item): Resolution[] {
-		if (newitem.path === this.indexpath) return []
 		const olditem = this.getLatest(newitem.path) || newitem
 
 		switch (olditem.lastAction) {

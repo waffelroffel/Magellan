@@ -1,3 +1,9 @@
+// ---------------- Vessel ----------------
+export const enum SHARE_TYPE {
+	All2All, // everyone can do whatever they want
+	One2Aall, // one/few admin(s)
+}
+
 // ---------------- CARGOLIST ----------------
 export const enum ItemType {
 	Folder,
@@ -59,4 +65,10 @@ export const enum Medium {
 export const enum ResolveOption {
 	LWW,
 	DUP,
+}
+
+// ---------------- PRIVILEGES ----------------
+export const enum PRIVILEGE_TYPE {
+	READ,
+	WRITE,
 }

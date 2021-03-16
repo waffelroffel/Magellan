@@ -7,6 +7,8 @@ import {
 	rmSync,
 	createWriteStream,
 	createReadStream,
+	writeFileSync,
+	readFileSync,
 } from "fs"
 import { join, sep } from "path"
 import { v4 as uuid4 } from "uuid"
@@ -17,14 +19,25 @@ import {
 	ActionType as AT,
 	Medium,
 	ResolveOption as RO,
+	SHARE_TYPE,
 } from "./enums"
-import { Item, NID, IndexArray, Streamable } from "./interfaces"
-import NetworkInterface from "./NetworkInterface"
+import {
+	Item,
+	NID,
+	IndexArray,
+	Streamable,
+	Privileges,
+	Settings,
+} from "./interfaces"
+import ProxyInterface from "./ProxyInterface"
 import { cts, ct, computehash } from "./utils"
 import Proxy from "./Proxies/Proxy"
 import LocalProxy from "./Proxies/LocalProxy"
 import HTTPProxy from "./Proxies/HTTPProxy"
 import VesselServer from "./VesselServer"
+
+const TABLE_END = "indextable.json"
+const SETTINGS_END = "settings.json"
 
 /**
  * TODO
@@ -39,55 +52,139 @@ export default class Vessel extends ABCVessel {
 	root: string
 	rooti: number
 	rootarr: string[]
-	tableEnd = "indextable.json"
-	tablePath = "indextable.json"
-	watcher: FSWatcher
+	tableEnd = TABLE_END
+	tablePath = TABLE_END
+	settingsEnd = SETTINGS_END
+	settingsPath = SETTINGS_END
+	watcher?: FSWatcher
 	index: CargoList
-	skiplist = new Set<string>()
+	skiplist = new Set<string>() // TODO: wait for skiplist.length === 0 before exiting
 	//log = new Log()
 	init = true
 	skip = false
-	networkinterface = new NetworkInterface()
+	proxyinterface = new ProxyInterface()
 	server: VesselServer
+	private _sharetype?: SHARE_TYPE
+	admins = new Set<Proxy>()
+	privs: Privileges = { read: true, write: false }
+	ignores: Set<string>
 
 	localtempfilehashes = new Map<string, string>()
 
 	constructor(user: string, root: string) {
 		super()
+
 		this.user = user
 
 		this.root = root
 		this.rooti = root.length
 		this.rootarr = root.split(sep)
 		this.tablePath = join(root, this.tableEnd)
+		this.settingsPath = join(root, this.settingsEnd)
+		this.ignores = new Set<string>().add(this.tablePath).add(this.settingsPath)
 
 		this.index = new CargoList(root)
 
-		this.watcher = chokidar(root, { persistent: true })
-		this.setupEvents()
-
-		const { host, port } = this.networkinterface.nid
+		const { host, port } = this.proxyinterface.nid
 		this.server = new VesselServer(this, host, port)
 	}
 
-	nid(): NID {
-		return this.networkinterface.nid
+	get nid(): NID {
+		return this.proxyinterface.nid
+	}
+
+	get sharetype(): SHARE_TYPE {
+		return this.resolve(this._sharetype)
 	}
 
 	rejoin(): Vessel {
-		this.skip = true
+		this.skip = true // TODO: remove and do file hash checking with index
 		this.index.mergewithlocal() // Assuming no changes when process is not running  // TODO: add file checking
-		this.server.listen()
+		return this.connect()
+	}
+
+	join(nid: NID): Vessel {
+		this.skip = true // TODO: remove and do file hash checking with index
+		return this.connect(() => {
+			this.fetchNetInfo(nid)
+		}) // TODO: change addnode in proxyinterface to remove duplicates
+	}
+
+	new(sharetype: SHARE_TYPE): Vessel {
+		this._sharetype = sharetype
+		this.privs.write = true
+		return this.connect()
+	}
+
+	vanish(): void {
+		this.logger("POFF! GONE.")
+	}
+
+	private fetchNetInfo(nid: NID): void {
+		const proxy = this.proxyinterface.addNode(Medium.http, { nid })
+		if (!(proxy instanceof LocalProxy || proxy instanceof HTTPProxy))
+			throw Error()
+		Promise.resolve(proxy.fetchNetInfo()).then(
+			info => (this._sharetype = info.sharetype)
+		)
+	}
+
+	load(): Vessel {
+		const data = readFileSync(this.settingsPath, { encoding: "utf8" })
+		const settings: Settings = JSON.parse(data)
+		this.user = settings.user
+		this.root = settings.root
+		this.rooti = settings.rooti
+		this.rootarr = settings.rootarr
+		this.tableEnd = settings.tableEnd
+		this.tablePath = settings.tablePath
+		this.settingsEnd = settings.settingsEnd
+		this.settingsPath = settings.settingsPath
+		settings.proxyinterface.forEach(nid => {
+			this.proxyinterface.addNode(Medium.http, { nid })
+		})
+		this._sharetype = settings.sharetype
+		settings.admins.forEach(nid => {
+			const proxy = this.proxyinterface.get(nid)
+			if (!proxy) return console.log("admin proxy not http")
+			this.admins.add(proxy)
+		})
+		this.privs = settings.privs
+		this.ignores = new Set<string>()
+		settings.ignores.forEach(path => this.ignores.add(path))
 		return this
 	}
 
-	startnew(): Vessel {
-		this.server.listen()
+	save(): Vessel {
+		const settings: Settings = {
+			user: this.user,
+			root: this.root,
+			rooti: this.rooti,
+			rootarr: this.rootarr,
+			tableEnd: this.tableEnd,
+			tablePath: this.tablePath,
+			settingsEnd: this.settingsEnd,
+			settingsPath: this.settingsPath,
+			proxyinterface: this.proxyinterface.serialize(),
+			sharetype: this.sharetype,
+			admins: this.serializeAdmins(),
+			privs: this.privs,
+			ignores: [...this.ignores],
+		}
+		writeFileSync(this.settingsPath, JSON.stringify(settings))
 		return this
 	}
 
-	load() {}
-	save() {}
+	private resolve<T>(value: T | undefined): T {
+		if (value === undefined) throw Error()
+		return value
+	}
+
+	private serializeAdmins(): NID[] {
+		return [...this.admins]
+			.filter(p => p instanceof HTTPProxy)
+			.map(p => (p as HTTPProxy).nid)
+	}
 
 	private removeRoot(path: string): string {
 		return path.substring(this.rooti)
@@ -97,28 +194,53 @@ export default class Vessel extends ABCVessel {
 		console.log(cts(), this.user, ...msg)
 	}
 
-	private setupEvents() {
-		this.watcher
-			.on("add", (path: string) => this.applyLocal(path, IT.File, AT.Add))
-			.on("change", (path: string) => this.applyLocal(path, IT.File, AT.Change))
-			.on("unlink", (path: string) => this.applyLocal(path, IT.File, AT.Remove))
-			.on("addDir", (path: string) => this.applyLocal(path, IT.Folder, AT.Add))
-			.on("unlinkDir", (path: string) => {
-				const patharr = path.split(sep)
-				if (this.rootarr.some((p, i) => p !== patharr[i])) return // when deleting folder with files, full path is returned
-				this.applyLocal(path, IT.Folder, AT.Remove)
-			}) // TODO: error when deleting folder with folders due to order of deletion parent->child
-			.on("error", this.logger) // TODO: when empty folder gets deleted throws error
-			.on("ready", () => {
-				this.init = false
-				this.skip = false
-				this.index.save()
-				this.logger("PLVS VLTRA!")
-				//this.logger(this.log.history)
+	private connect(post?: () => void): Vessel {
+		Promise.resolve(this.setupEvents())
+			.then(() => {
+				this.server.listen()
+				if (post) post()
 			})
+			.catch(this.logger)
+		return this
 	}
 
-	private applyLocal(path: string, type: IT, action: AT) {
+	private disconnect(): Vessel {
+		this.server.server.close() // TODO: temp
+		return this
+	}
+
+	private setupEvents(): Promise<void> {
+		return new Promise((resolve, rejects) => {
+			this.watcher = chokidar(this.root, { persistent: true })
+				.on("add", (path: string) => this.applyLocal(path, IT.File, AT.Add))
+				.on("change", (path: string) =>
+					this.applyLocal(path, IT.File, AT.Change)
+				)
+				.on("unlink", (path: string) =>
+					this.applyLocal(path, IT.File, AT.Remove)
+				)
+				.on("addDir", (path: string) =>
+					this.applyLocal(path, IT.Folder, AT.Add)
+				)
+				.on("unlinkDir", (path: string) => {
+					const patharr = path.split(sep)
+					if (this.rootarr.some((p, i) => p !== patharr[i])) return // when deleting folder with files, full path is returned
+					this.applyLocal(path, IT.Folder, AT.Remove)
+				}) // TODO: error when deleting folder with folders due to order of deletion parent->child
+				.on("error", rejects) // TODO: when empty folder gets deleted throws error
+				.on("ready", () => {
+					this.init = false
+					this.skip = false
+					this.index.save()
+					this.logger("PLVS VLTRA!")
+					resolve()
+					//this.logger(this.log.history)
+				})
+		})
+	}
+
+	private applyLocal(path: string, type: IT, action: AT): void {
+		if (this.ignores.has(path)) return
 		if (this.skiplist.delete(path) || this.skip) return
 		if ([this.root, this.tablePath].includes(path)) return
 
@@ -151,10 +273,12 @@ export default class Vessel extends ABCVessel {
 
 		// this.localtempfilehashes.set(item.hash ?? "", item.path) // TODO
 		this.index.save()
-		this.networkinterface.broadcast(item, this.createRS(item))
+		this.proxyinterface.broadcast(item, this.createRS(item))
 	}
 
 	applyIncoming(item: Item, rs?: NodeJS.ReadableStream): void {
+		if (this.ignores.has(item.path))
+			throw Error(`Vessel.applyIncoming: got ${item.path}`)
 		const ress = this.index.apply(item)
 		this.logger("REMOTE", item.lastAction, item.path)
 		if (!ress[0].new && ress[0].ro === RO.LWW && !ress[0].io) return
@@ -177,7 +301,7 @@ export default class Vessel extends ABCVessel {
 		//throw Error("Vessel.applyFolderIO: illegal argument")
 	}
 
-	private applyFileIO(item: Item, fullpath: string, rs?: Streamable) {
+	private applyFileIO(item: Item, fullpath: string, rs?: Streamable | null) {
 		if (item.lastAction === AT.Remove && existsSync(fullpath)) {
 			this.skiplist.add(fullpath)
 			rmSync(fullpath)
@@ -194,7 +318,7 @@ export default class Vessel extends ABCVessel {
 	}
 
 	addVessel(type: Medium, data: { vessel?: Vessel; nid?: NID }): void {
-		const proxy = this.networkinterface.addNode(type, data)
+		const proxy = this.proxyinterface.addNode(type, data)
 		if (!(proxy instanceof LocalProxy || proxy instanceof HTTPProxy))
 			throw Error(`Vessel.addVessel: ${proxy.constructor.name} not implemented`)
 
@@ -232,5 +356,7 @@ export default class Vessel extends ABCVessel {
 	}
 }
 
-if (require.main === module)
-	new Vessel("frank", join("testroot", "dave", "root")).rejoin()
+if (require.main === module) {
+	const v = new Vessel("evan", join("testroot", "evan")).new(SHARE_TYPE.All2All)
+	setTimeout(() => v.save(), 1000)
+}

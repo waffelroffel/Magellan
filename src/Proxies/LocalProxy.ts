@@ -29,7 +29,7 @@ export default class LocalProxy extends Proxy {
 		return JSON.parse(this.local.index.serialize())
 	}
 
-	getProxies(): [string, NID][] {
-		throw Error()
+	fetchNetInfo() {
+		return { sharetype: this.local.sharetype }
 	}
 }

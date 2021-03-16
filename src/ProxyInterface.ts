@@ -1,16 +1,29 @@
 import { Medium } from "./enums"
 import { NID, Item, Streamable, ProxyOption } from "./interfaces"
 import LocalProxy from "./Proxies/LocalProxy"
-import Vessel from "./Vessel"
 import Proxy from "./Proxies/Proxy"
 import HTTPProxy from "./Proxies/HTTPProxy"
 
-export default class NetworkInterface {
+export default class ProxyInterface {
 	nid: NID
 	network: Proxy[] = []
 
 	constructor() {
 		this.nid = this.getIpPort()
+	}
+
+	serialize(): NID[] {
+		return this.network
+			.filter(p => p instanceof HTTPProxy)
+			.map(p => (p as HTTPProxy).nid)
+	}
+
+	get(nid: NID): Proxy | null {
+		return (
+			this.network
+				.filter(p => p instanceof HTTPProxy)
+				.find(p => (p as HTTPProxy).nid === nid) ?? null
+		)
 	}
 
 	private getIpPort() {
@@ -39,7 +52,7 @@ export default class NetworkInterface {
 		this.network = this.network.filter(p => p !== proxy)
 	}
 
-	broadcast(item: Item, rs: Streamable): void {
+	broadcast(item: Item, rs: Streamable | null): void {
 		this.network.forEach(p => p.send(item, rs))
 	}
 }

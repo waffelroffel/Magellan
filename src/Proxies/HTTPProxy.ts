@@ -1,6 +1,6 @@
 import fetch from "node-fetch"
-import { ItemType as IT, Medium } from "../enums"
-import { Item, Streamable, IndexArray, Tomb } from "../interfaces"
+import { ItemType as IT, Medium, SHARE_TYPE } from "../enums"
+import { Item, Streamable, IndexArray, Tomb, NID } from "../interfaces"
 import Proxy from "./Proxy"
 
 /**
@@ -10,11 +10,12 @@ import Proxy from "./Proxy"
  */
 export default class HTTPProxy extends Proxy {
 	type = Medium.http
-	protocol = "http://"
-	host: string
-	port: number
-	base: string
-	urlgetindex: string
+	private protocol = "http://"
+	private host: string
+	private port: number
+	private base: string
+	private urlgetindex: string
+	private urlgetnetinfo: string
 
 	constructor(host: string, port: number) {
 		super()
@@ -22,6 +23,11 @@ export default class HTTPProxy extends Proxy {
 		this.port = port
 		this.base = `${this.protocol}${host}:${port}`
 		this.urlgetindex = `${this.base}?get=index`
+		this.urlgetnetinfo = `${this.base}?get=netinfo`
+	}
+
+	get nid(): NID {
+		return { host: this.host, port: this.port }
 	}
 
 	send(item: Item, rs?: Streamable) {
@@ -55,6 +61,12 @@ export default class HTTPProxy extends Proxy {
 
 	fetchIndex(): Promise<IndexArray> {
 		return fetch(this.urlgetindex, {
+			method: "GET",
+		}).then(res => res.json())
+	}
+
+	fetchNetInfo(): Promise<{ sharetype: SHARE_TYPE }> {
+		return fetch(this.urlgetnetinfo, {
 			method: "GET",
 		}).then(res => res.json())
 	}

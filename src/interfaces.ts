@@ -1,8 +1,31 @@
 import { Socket } from "net"
 import { ReadStream } from "fs"
-import { TombType, ItemType, ActionType, ResolveOption } from "./enums"
+import {
+	TombType,
+	ItemType,
+	ActionType,
+	ResolveOption,
+	SHARE_TYPE,
+} from "./enums"
 import { IncomingMessage } from "http"
 import Vessel from "./Vessel"
+
+// ---------------- Vessel ----------------
+export interface Settings {
+	user: string
+	root: string
+	rooti: number
+	rootarr: string[]
+	tableEnd: string
+	tablePath: string
+	settingsEnd: string
+	settingsPath: string
+	proxyinterface: NID[]
+	sharetype: SHARE_TYPE
+	admins: NID[]
+	privs: Privileges
+	ignores: string[]
+}
 
 // ---------------- CARGOLIST ----------------
 export interface Tomb {
@@ -47,7 +70,6 @@ export interface NID {
 export type Streamable =
 	| ReadStream
 	| Socket
-	| null
 	| IncomingMessage
 	| NodeJS.ReadableStream
 
@@ -81,4 +103,10 @@ export interface DirRPConfig {
 	addadd: ResolveOption
 	addrem: ResolveOption
 	remrem: ResolveOption
+}
+
+// ---------------- PRIVILEGES ----------------
+export interface Privileges {
+	read: boolean
+	write: boolean
 }
