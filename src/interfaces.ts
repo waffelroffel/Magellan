@@ -78,6 +78,11 @@ export interface ProxyOption {
 	nid?: NID
 }
 
+export interface INVITE_RESPONSE {
+	sharetype: SHARE_TYPE
+	peers: NID[]
+}
+
 // ---------------- RESOLVES ----------------
 export interface Resolution {
 	before?: Item

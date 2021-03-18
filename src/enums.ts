@@ -1,33 +1,41 @@
 // ---------------- Vessel ----------------
 export const enum SHARE_TYPE {
-	All2All, // everyone can do whatever they want
-	One2Aall, // one/few admin(s)
+	All2All = "A2A", // everyone can do whatever they want
+	One2Aall = "121", // one/few admin(s)
+}
+
+const SHARE_TYPES = [SHARE_TYPE.All2All, SHARE_TYPE.One2Aall]
+
+export const toShareType = (value: string): SHARE_TYPE => {
+	const type = SHARE_TYPES.find(st => st === value)
+	if (type === undefined) throw Error("toShareType: invalid type")
+	return type
 }
 
 // ---------------- CARGOLIST ----------------
 export const enum ItemType {
-	Folder,
-	File,
+	Dir = "D",
+	File = "F",
 }
 
-const ITEM_TYPES = [ItemType.Folder, ItemType.File]
+const ITEM_TYPES = [ItemType.Dir, ItemType.File]
 
 export const toItemType = (value: string): ItemType => {
-	const type = ITEM_TYPES.find(it => it.toString() === value)
+	const type = ITEM_TYPES.find(it => it === value)
 	if (type === undefined) throw Error("toItemType: invalid type")
 	return type
 }
 
 export const enum TombType {
-	Moved,
-	Renamed,
-	Deleted,
+	Moved = "M",
+	Renamed = "R",
+	Deleted = "D",
 }
 
 const TOMB_TYPES = [TombType.Moved, TombType.Renamed, TombType.Deleted]
 
 export const toTombTypes = (value: string): TombType => {
-	const tomb = TOMB_TYPES.find(tt => tt.toString() === value)
+	const tomb = TOMB_TYPES.find(tt => tt === value)
 	if (tomb === undefined) throw Error("toTombTypes: invalid type")
 	return tomb
 }

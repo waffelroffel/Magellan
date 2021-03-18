@@ -1,6 +1,13 @@
 import fetch from "node-fetch"
-import { ItemType as IT, Medium, SHARE_TYPE } from "../enums"
-import { Item, Streamable, IndexArray, Tomb, NID } from "../interfaces"
+import { ItemType as IT, Medium, SHARE_TYPE, toShareType } from "../enums"
+import {
+	Item,
+	Streamable,
+	IndexArray,
+	Tomb,
+	NID,
+	INVITE_RESPONSE,
+} from "../interfaces"
 import Proxy from "./Proxy"
 
 /**
@@ -16,6 +23,8 @@ export default class HTTPProxy extends Proxy {
 	private base: string
 	private urlgetindex: string
 	private urlgetnetinfo: string
+	private urlgetnids: string
+	private urlpostpeer: string
 
 	constructor(host: string, port: number) {
 		super()
@@ -24,6 +33,8 @@ export default class HTTPProxy extends Proxy {
 		this.base = `${this.protocol}${host}:${port}`
 		this.urlgetindex = `${this.base}?get=index`
 		this.urlgetnetinfo = `${this.base}?get=netinfo`
+		this.urlgetnids = `${this.base}?get=nids`
+		this.urlpostpeer = `${this.base}?peer=true` // TODO: clean later
 	}
 
 	get nid(): NID {
@@ -65,9 +76,26 @@ export default class HTTPProxy extends Proxy {
 		}).then(res => res.json())
 	}
 
-	fetchNetInfo(): Promise<{ sharetype: SHARE_TYPE }> {
+	fetchNetInfo(): Promise<SHARE_TYPE> {
 		return fetch(this.urlgetnetinfo, {
 			method: "GET",
+		})
+			.then(res => res.text())
+			.then(toShareType)
+	}
+
+	getinvite(src: NID): Promise<INVITE_RESPONSE> {
+		return fetch(`${this.urlgetnids}&srchost=${src.host}&srcport=${src.port}`, {
+			method: "GET",
 		}).then(res => res.json())
+	}
+
+	addPeer(nid: NID): Promise<string> {
+		return fetch(this.urlpostpeer, {
+			method: "POST",
+			body: JSON.stringify(nid),
+		})
+			.then(() => "OK")
+			.catch(() => "ERROR") // TODO
 	}
 }

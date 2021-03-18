@@ -1,5 +1,11 @@
 import { Medium, SHARE_TYPE } from "../enums"
-import { Streamable, Item, IndexArray } from "../interfaces"
+import {
+	Streamable,
+	Item,
+	IndexArray,
+	NID,
+	INVITE_RESPONSE,
+} from "../interfaces"
 import { ABCVessel } from "./ABCVessel"
 
 export default abstract class Proxy extends ABCVessel {
@@ -8,7 +14,6 @@ export default abstract class Proxy extends ABCVessel {
 	abstract fetch(items: Item[]): (Streamable | Promise<Streamable> | null)[] // overwritten item return null
 	abstract fetchIndex(): IndexArray | Promise<IndexArray>
 	//abstract getProxies(): [string, NID][] | Promise<[string, NID][]>
-	abstract fetchNetInfo():
-		| { sharetype: SHARE_TYPE }
-		| Promise<{ sharetype: SHARE_TYPE }>
+	abstract getinvite(src: NID): INVITE_RESPONSE | Promise<INVITE_RESPONSE>
+	abstract addPeer(src: NID): string | Promise<string> // TODO: return type
 }

@@ -9,11 +9,13 @@ import { URL } from "url"
 import {
 	ActionType as AT,
 	ItemType as IT,
+	Medium,
 	toActionType,
 	toItemType,
 	toTombTypes,
 } from "./enums"
-import { Item } from "./interfaces"
+import { INVITE_RESPONSE, Item } from "./interfaces"
+import HTTPProxy from "./Proxies/HTTPProxy"
 import Vessel from "./Vessel"
 
 const enum DEFAULT_SETTINGS {
@@ -43,6 +45,10 @@ export default class VesselServer {
 		})
 	}
 
+	close() {
+		this.server.close()
+	}
+
 	private reqLis(): RequestListener {
 		return (req, res) => {
 			if (req.method === "POST") this.reqPOST(req, res)
@@ -53,9 +59,9 @@ export default class VesselServer {
 
 	private reqGET(req: IncomingMessage, res: ServerResponse): void {
 		const params = this.getParams(req)
-		if (params.get("get") === "index")
-			return res.end(this.vessel.index.serialize())
-		//if (get === "proxies") return res.end(this.vessel.getProxies())
+		const get = params.get("get")
+		if (get === "index") return res.end(this.vessel.index.serialize())
+		if (get === "nids") return this.getInvite(params, res)
 
 		const cparams = this.checkCoreParams(params)
 		if (!cparams) return res.destroy() // TODO: add error message
@@ -80,6 +86,20 @@ export default class VesselServer {
 
 		this.vessel.applyIncoming(item, req) // TODO: return boolean
 		res.end("Transfer successful")
+	}
+
+	private getInvite(params: URLSearchParams, res: ServerResponse): void {
+		const host = params.get("srchost")
+		const port = params.get("srcport")
+		if (!host || !port) return res.destroy()
+		const ir: INVITE_RESPONSE = {
+			sharetype: this.vessel.sharetype,
+			peers: this.vessel.proxyinterface.network
+				.filter(p => p instanceof HTTPProxy)
+				.map(p => (p as HTTPProxy).nid),
+		}
+		res.end(JSON.stringify(ir))
+		this.vessel.addVessel(Medium.http, { nid: { host, port: +port } })
 	}
 
 	private getParams(req: IncomingMessage): URLSearchParams {

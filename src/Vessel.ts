@@ -56,10 +56,9 @@ export default class Vessel extends ABCVessel {
 	tablePath = TABLE_END
 	settingsEnd = SETTINGS_END
 	settingsPath = SETTINGS_END
-	watcher?: FSWatcher
+	_watcher?: FSWatcher
 	index: CargoList
-	skiplist = new Set<string>() // TODO: wait for skiplist.length === 0 before exiting
-	//log = new Log()
+	skiplist = new Set<string>()
 	init = true
 	skip = false
 	proxyinterface = new ProxyInterface()
@@ -68,6 +67,7 @@ export default class Vessel extends ABCVessel {
 	admins = new Set<Proxy>()
 	privs: Privileges = { read: true, write: false }
 	ignores: Set<string>
+	nid: NID
 
 	localtempfilehashes = new Map<string, string>()
 
@@ -85,16 +85,16 @@ export default class Vessel extends ABCVessel {
 
 		this.index = new CargoList(root)
 
-		const { host, port } = this.proxyinterface.nid
-		this.server = new VesselServer(this, host, port)
-	}
-
-	get nid(): NID {
-		return this.proxyinterface.nid
+		this.nid = this.proxyinterface.nid
+		this.server = new VesselServer(this, this.nid.host, this.nid.port)
 	}
 
 	get sharetype(): SHARE_TYPE {
 		return this.resolve(this._sharetype)
+	}
+
+	private get watcher(): FSWatcher {
+		return this.resolve(this._watcher)
 	}
 
 	rejoin(): Vessel {
@@ -103,10 +103,10 @@ export default class Vessel extends ABCVessel {
 		return this.connect()
 	}
 
-	join(nid: NID): Vessel {
-		this.skip = true // TODO: remove and do file hash checking with index
+	join(nid: NID, addlocal = false): Vessel {
+		this.skip = !addlocal // TODO: remove and do file hash checking with index
 		return this.connect(() => {
-			this.fetchNetInfo(nid)
+			this.joinvia(nid)
 		}) // TODO: change addnode in proxyinterface to remove duplicates
 	}
 
@@ -120,12 +120,27 @@ export default class Vessel extends ABCVessel {
 		this.logger("POFF! GONE.")
 	}
 
-	private fetchNetInfo(nid: NID): void {
+	exit(): void {
+		this.skip = true
+		this.save()
+		this.index.save()
+		this.watcher.close()
+		this.server.close()
+	}
+
+	private joinvia(nid: NID): void {
 		const proxy = this.proxyinterface.addNode(Medium.http, { nid })
 		if (!(proxy instanceof LocalProxy || proxy instanceof HTTPProxy))
 			throw Error()
-		Promise.resolve(proxy.fetchNetInfo()).then(
-			info => (this._sharetype = info.sharetype)
+
+		Promise.resolve(proxy.getinvite(this.nid)).then(ir => {
+			this._sharetype = ir.sharetype
+			if (ir.sharetype === SHARE_TYPE.All2All) this.privs.write = true
+			ir.peers.forEach(nid => this.proxyinterface.addNode(Medium.http, { nid }))
+		})
+
+		Promise.resolve(proxy.fetchIndex()).then(index =>
+			this.updateCargo(index, proxy)
 		)
 	}
 
@@ -204,14 +219,9 @@ export default class Vessel extends ABCVessel {
 		return this
 	}
 
-	private disconnect(): Vessel {
-		this.server.server.close() // TODO: temp
-		return this
-	}
-
 	private setupEvents(): Promise<void> {
 		return new Promise((resolve, rejects) => {
-			this.watcher = chokidar(this.root, { persistent: true })
+			this._watcher = chokidar(this.root, { persistent: true })
 				.on("add", (path: string) => this.applyLocal(path, IT.File, AT.Add))
 				.on("change", (path: string) =>
 					this.applyLocal(path, IT.File, AT.Change)
@@ -219,13 +229,11 @@ export default class Vessel extends ABCVessel {
 				.on("unlink", (path: string) =>
 					this.applyLocal(path, IT.File, AT.Remove)
 				)
-				.on("addDir", (path: string) =>
-					this.applyLocal(path, IT.Folder, AT.Add)
-				)
+				.on("addDir", (path: string) => this.applyLocal(path, IT.Dir, AT.Add))
 				.on("unlinkDir", (path: string) => {
 					const patharr = path.split(sep)
 					if (this.rootarr.some((p, i) => p !== patharr[i])) return // when deleting folder with files, full path is returned
-					this.applyLocal(path, IT.Folder, AT.Remove)
+					this.applyLocal(path, IT.Dir, AT.Remove)
 				}) // TODO: error when deleting folder with folders due to order of deletion parent->child
 				.on("error", rejects) // TODO: when empty folder gets deleted throws error
 				.on("ready", () => {
@@ -240,6 +248,7 @@ export default class Vessel extends ABCVessel {
 	}
 
 	private applyLocal(path: string, type: IT, action: AT): void {
+		if (!this.privs.write) return
 		if (this.ignores.has(path)) return
 		if (this.skiplist.delete(path) || this.skip) return
 		if ([this.root, this.tablePath].includes(path)) return
@@ -277,6 +286,7 @@ export default class Vessel extends ABCVessel {
 	}
 
 	applyIncoming(item: Item, rs?: NodeJS.ReadableStream): void {
+		if (!this.privs.read) return // TODO: ¯\_(ツ)_/¯
 		if (this.ignores.has(item.path))
 			throw Error(`Vessel.applyIncoming: got ${item.path}`)
 		const ress = this.index.apply(item)
@@ -284,10 +294,12 @@ export default class Vessel extends ABCVessel {
 		if (!ress[0].new && ress[0].ro === RO.LWW && !ress[0].io) return
 
 		const full = join(this.root, item.path)
-		if (item.type === IT.Folder) this.applyFolderIO(item, full)
+		if (item.type === IT.Dir) this.applyFolderIO(item, full)
 		else if (item.type === IT.File) this.applyFileIO(item, full, rs)
 
 		this.index.save()
+
+		//TODO: forward known peers
 	}
 
 	private applyFolderIO(item: Item, fullpath: string): void {
@@ -312,7 +324,7 @@ export default class Vessel extends ABCVessel {
 	}
 
 	createRS(item: Item): NodeJS.ReadableStream | null {
-		if (item.type === IT.Folder || item.lastAction === AT.Remove) return null
+		if (item.type === IT.Dir || item.lastAction === AT.Remove) return null
 		this.logger("createRS", item.path)
 		return createReadStream(join(this.root, item.path))
 	}
@@ -347,7 +359,7 @@ export default class Vessel extends ABCVessel {
 			proxy.fetch(items).forEach((pr, i) => {
 				const item = items[i]
 				const full = join(this.root, item.path)
-				if (item.type === IT.Folder) this.applyFolderIO(item, full)
+				if (item.type === IT.Dir) this.applyFolderIO(item, full)
 				else if (item.type === IT.File)
 					Promise.resolve(pr).then(rs => this.applyFileIO(item, full, rs))
 			})
@@ -357,6 +369,15 @@ export default class Vessel extends ABCVessel {
 }
 
 if (require.main === module) {
-	const v = new Vessel("evan", join("testroot", "evan")).new(SHARE_TYPE.All2All)
-	setTimeout(() => v.save(), 1000)
+	const evan = new Vessel("evan", join("testroot", "evan")).new(
+		SHARE_TYPE.All2All
+	)
+	setTimeout(() => {
+		const dave = new Vessel("dave", join("testroot", "dave")).join(
+			evan.nid,
+			true
+		)
+	}, 1000)
+	//const dave = new Vessel("dave", join("testroot", "dave")).join(evan.nid)
+	//setTimeout(() => evan.save(), 1000)
 }
