@@ -1,4 +1,4 @@
-import { Medium, SHARE_TYPE } from "../enums"
+import { Medium, ProxyResponseCode } from "../enums"
 import {
 	Streamable,
 	Item,
@@ -10,10 +10,16 @@ import { ABCVessel } from "./ABCVessel"
 
 export default abstract class Proxy extends ABCVessel {
 	abstract type: Medium
+	admin: boolean
+
 	abstract send(item: Item, rs?: Streamable | null): void
-	abstract fetch(items: Item[]): (Streamable | Promise<Streamable> | null)[] // overwritten item return null
+	abstract fetch(items: Item[]): (Streamable | Promise<Streamable> | null)[]
 	abstract fetchIndex(): IndexArray | Promise<IndexArray>
-	//abstract getProxies(): [string, NID][] | Promise<[string, NID][]>
 	abstract getinvite(src: NID): INVITE_RESPONSE | Promise<INVITE_RESPONSE>
-	abstract addPeer(src: NID): string | Promise<string> // TODO: return type
+	abstract addPeer(src: NID): ProxyResponseCode | Promise<ProxyResponseCode> // TODO: return type
+
+	constructor(admin?: boolean) {
+		super()
+		this.admin = admin ?? false
+	}
 }

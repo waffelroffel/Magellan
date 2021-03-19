@@ -94,9 +94,7 @@ export default class VesselServer {
 		if (!host || !port) return res.destroy()
 		const ir: INVITE_RESPONSE = {
 			sharetype: this.vessel.sharetype,
-			peers: this.vessel.proxyinterface.network
-				.filter(p => p instanceof HTTPProxy)
-				.map(p => (p as HTTPProxy).nid),
+			peers: this.vessel.proxyinterface.serialize().map(p => p.nid),
 		}
 		res.end(JSON.stringify(ir))
 		this.vessel.addVessel(Medium.http, { nid: { host, port: +port } })

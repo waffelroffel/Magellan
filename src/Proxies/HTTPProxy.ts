@@ -1,5 +1,11 @@
 import fetch from "node-fetch"
-import { ItemType as IT, Medium, SHARE_TYPE, toShareType } from "../enums"
+import {
+	ItemType as IT,
+	Medium,
+	ProxyResponseCode,
+	SHARE_TYPE,
+	toShareType,
+} from "../enums"
 import {
 	Item,
 	Streamable,
@@ -26,8 +32,8 @@ export default class HTTPProxy extends Proxy {
 	private urlgetnids: string
 	private urlpostpeer: string
 
-	constructor(host: string, port: number) {
-		super()
+	constructor(host: string, port: number, admin?: boolean) {
+		super(admin)
 		this.host = host
 		this.port = port
 		this.base = `${this.protocol}${host}:${port}`
@@ -90,12 +96,12 @@ export default class HTTPProxy extends Proxy {
 		}).then(res => res.json())
 	}
 
-	addPeer(nid: NID): Promise<string> {
+	addPeer(nid: NID): Promise<ProxyResponseCode> {
 		return fetch(this.urlpostpeer, {
 			method: "POST",
 			body: JSON.stringify(nid),
 		})
-			.then(() => "OK")
-			.catch(() => "ERROR") // TODO
+			.then(() => ProxyResponseCode.OK)
+			.catch(() => ProxyResponseCode.ERROR)
 	}
 }

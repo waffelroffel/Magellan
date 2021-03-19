@@ -20,11 +20,17 @@ export interface Settings {
 	tablePath: string
 	settingsEnd: string
 	settingsPath: string
-	proxyinterface: NID[]
+	nid: NID
+	peers: { nid: NID; admin: boolean }[]
 	sharetype: SHARE_TYPE
-	admins: NID[]
 	privs: Privileges
 	ignores: string[]
+}
+
+export interface StartupOptions {
+	init: boolean
+	skip: boolean
+	check: boolean
 }
 
 // ---------------- CARGOLIST ----------------
@@ -76,6 +82,7 @@ export type Streamable =
 export interface ProxyOption {
 	vessel?: Vessel
 	nid?: NID
+	admin?: boolean
 }
 
 export interface INVITE_RESPONSE {

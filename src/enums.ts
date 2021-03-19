@@ -70,6 +70,12 @@ export const enum Medium {
 }
 
 // ---------------- RESOLVES ----------------
+export const enum ProxyResponseCode {
+	OK = "OK",
+	ERROR = "ERROR",
+}
+
+// ---------------- RESOLVES ----------------
 export const enum ResolveOption {
 	LWW,
 	DUP,

@@ -24,3 +24,9 @@ export function computehash(path: string): string {
 export function deepcopy<T>(json: T): T {
 	return JSON.parse(JSON.stringify(json))
 }
+
+export function randint(min: number, max: number): number {
+	min = Math.floor(min)
+	max = Math.floor(max)
+	return min + Math.floor(Math.random() * (max - min))
+}

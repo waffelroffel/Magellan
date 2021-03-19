@@ -11,8 +11,8 @@ const users = ["dave", "evan", "frank"]
 make_test_env(users, [0, 0, 0], [1, 1, 0])
 
 const roots = users.map(u => join(TESTROOT, u))
-const vessels = roots.map((ur, i) =>
-	new Vessel(users[i], ur).new(SHARE_TYPE.All2All)
+const vessels = roots.map(
+	(ur, i) => new Vessel(users[i], ur).new(SHARE_TYPE.All2All) // TODO: rewrite
 )
 
 const pool = make_oplist()

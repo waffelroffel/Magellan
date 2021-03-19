@@ -1,5 +1,5 @@
 import { ReadStream } from "fs"
-import { Medium } from "../enums"
+import { Medium, ProxyResponseCode } from "../enums"
 import { Item, IndexArray, INVITE_RESPONSE } from "../interfaces"
 import Vessel from "../Vessel"
 import HTTPProxy from "./HTTPProxy"
@@ -9,8 +9,8 @@ export default class LocalProxy extends Proxy {
 	type = Medium.local
 	private local: Vessel
 
-	constructor(vessel: Vessel) {
-		super()
+	constructor(vessel: Vessel, admin?: boolean) {
+		super(admin)
 		this.local = vessel
 	}
 
@@ -33,13 +33,11 @@ export default class LocalProxy extends Proxy {
 	getinvite(): INVITE_RESPONSE {
 		return {
 			sharetype: this.local.sharetype,
-			peers: this.local.proxyinterface.network
-				.filter(p => p instanceof HTTPProxy)
-				.map(p => (p as HTTPProxy).nid),
+			peers: this.local.proxyinterface.serialize().map(p => p.nid),
 		}
 	}
 
-	addPeer(): string {
+	addPeer(): ProxyResponseCode {
 		throw Error("LocalProxy.addPeer: should not be called")
 	}
 }
