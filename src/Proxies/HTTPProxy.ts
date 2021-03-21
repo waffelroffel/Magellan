@@ -2,18 +2,11 @@ import fetch from "node-fetch"
 import {
 	ItemType as IT,
 	Medium,
-	ProxyResponseCode,
+	ResponseCode,
 	SHARE_TYPE,
 	toShareType,
 } from "../enums"
-import {
-	Item,
-	Streamable,
-	IndexArray,
-	Tomb,
-	NID,
-	INVITE_RESPONSE,
-} from "../interfaces"
+import { Item, IndexArray, Tomb, NID, InviteResponse } from "../interfaces"
 import Proxy from "./Proxy"
 
 /**
@@ -47,7 +40,7 @@ export default class HTTPProxy extends Proxy {
 		return { host: this.host, port: this.port }
 	}
 
-	send(item: Item, rs?: Streamable) {
+	send(item: Item, rs: NodeJS.ReadableStream | null) {
 		fetch(this.makePOST(item), {
 			method: "POST",
 			body: rs ?? undefined,
@@ -90,18 +83,18 @@ export default class HTTPProxy extends Proxy {
 			.then(toShareType)
 	}
 
-	getinvite(src: NID): Promise<INVITE_RESPONSE> {
+	getinvite(src: NID): Promise<InviteResponse> {
 		return fetch(`${this.urlgetnids}&srchost=${src.host}&srcport=${src.port}`, {
 			method: "GET",
 		}).then(res => res.json())
 	}
 
-	addPeer(nid: NID): Promise<ProxyResponseCode> {
+	addPeer(nid: NID): Promise<ResponseCode> {
 		return fetch(this.urlpostpeer, {
 			method: "POST",
 			body: JSON.stringify(nid),
 		})
-			.then(() => ProxyResponseCode.OK)
-			.catch(() => ProxyResponseCode.ERROR)
+			.then(() => ResponseCode.OK)
+			.catch(() => ResponseCode.ERROR)
 	}
 }

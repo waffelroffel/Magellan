@@ -8,7 +8,7 @@ const SHARE_TYPES = [SHARE_TYPE.All2All, SHARE_TYPE.One2Aall]
 
 export const toShareType = (value: string): SHARE_TYPE => {
 	const type = SHARE_TYPES.find(st => st === value)
-	if (type === undefined) throw Error("toShareType: invalid type")
+	if (!type) throw Error("toShareType: invalid type")
 	return type
 }
 
@@ -22,7 +22,7 @@ const ITEM_TYPES = [ItemType.Dir, ItemType.File]
 
 export const toItemType = (value: string): ItemType => {
 	const type = ITEM_TYPES.find(it => it === value)
-	if (type === undefined) throw Error("toItemType: invalid type")
+	if (!type) throw Error("toItemType: invalid type")
 	return type
 }
 
@@ -36,7 +36,7 @@ const TOMB_TYPES = [TombType.Moved, TombType.Renamed, TombType.Deleted]
 
 export const toTombTypes = (value: string): TombType => {
 	const tomb = TOMB_TYPES.find(tt => tt === value)
-	if (tomb === undefined) throw Error("toTombTypes: invalid type")
+	if (!tomb) throw Error("toTombTypes: invalid type")
 	return tomb
 }
 
@@ -58,7 +58,7 @@ const ACTION_TYPES = [
 
 export const toActionType = (value: string): ActionType => {
 	const action = ACTION_TYPES.find(at => at === value)
-	if (action === undefined) throw Error("toActionType: invalid type")
+	if (!action) throw Error("toActionType: invalid type")
 	return action
 }
 
@@ -70,7 +70,7 @@ export const enum Medium {
 }
 
 // ---------------- RESOLVES ----------------
-export const enum ProxyResponseCode {
+export const enum ResponseCode {
 	OK = "OK",
 	ERROR = "ERROR",
 }

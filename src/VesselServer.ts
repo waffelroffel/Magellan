@@ -5,6 +5,7 @@ import {
 	Server,
 	ServerResponse,
 } from "http"
+import { AddressInfo } from "net"
 import { URL } from "url"
 import {
 	ActionType as AT,
@@ -14,13 +15,12 @@ import {
 	toItemType,
 	toTombTypes,
 } from "./enums"
-import { INVITE_RESPONSE, Item } from "./interfaces"
-import HTTPProxy from "./Proxies/HTTPProxy"
+import { InviteResponse, Item } from "./interfaces"
 import Vessel from "./Vessel"
 
-const enum DEFAULT_SETTINGS {
-	HOST = "localhost",
-	PORT = 8000,
+const DEFAULT_SETTINGS = {
+	HOST: "localhost",
+	PORT: 8000,
 }
 
 export default class VesselServer {
@@ -39,9 +39,9 @@ export default class VesselServer {
 		this.vessel = vessel
 	}
 
-	listen() {
+	listen(post: (nid: string | AddressInfo | null) => void) {
 		this.server.listen(this.port, this.host, () => {
-			this.vessel.logger("ONLINE", this.server.address())
+			post(this.server.address())
 		})
 	}
 
@@ -69,7 +69,7 @@ export default class VesselServer {
 		const item = this.makeItem(cparams)
 		if (item.lastAction === AT.Remove) return res.destroy() // TODO: error message: illegal argument
 		// TODO: add hash and validate file before creating stream
-		this.vessel.createRS(item)?.pipe(res) ?? res.destroy() // TODO: error message: file not found
+		this.vessel.getRS(item)?.pipe(res) ?? res.destroy() // TODO: error message: file not found
 	}
 
 	private reqPOST(req: IncomingMessage, res: ServerResponse): void {
@@ -92,7 +92,7 @@ export default class VesselServer {
 		const host = params.get("srchost")
 		const port = params.get("srcport")
 		if (!host || !port) return res.destroy()
-		const ir: INVITE_RESPONSE = {
+		const ir: InviteResponse = {
 			sharetype: this.vessel.sharetype,
 			peers: this.vessel.proxyinterface.serialize().map(p => p.nid),
 		}

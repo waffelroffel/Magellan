@@ -9,7 +9,8 @@
 	"scripts": {
 		"deps": "npm i",
 		"setup": "ts-node testing/setup_env.test.ts",
-		"test": "ts-node testing/initial_sync.test.ts"
+		"test-start": "ts-node testing/initial_sync.test.ts",
+		"test-runtime": "ts-node testing/runtime.test.ts"
 	},
 	"dependencies": {
 		"chokidar": "^3.5.1",

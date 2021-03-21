@@ -1,12 +1,27 @@
 import { createHash } from "crypto"
-import { createReadStream, readFileSync } from "fs"
+import {
+	createReadStream,
+	createWriteStream,
+	existsSync,
+	mkdirSync,
+	readFileSync,
+	rmdirSync,
+	rmSync,
+} from "fs"
+import { join } from "path"
+import { ActionType as AT, ItemType as IT } from "./enums"
+import { Item } from "./interfaces"
 
-// timestamp for log
+/**
+ * timestamp for log
+ */
 export function cts(): string {
-	return `[${new Date().toLocaleString()}]`
+	return `[${new Date().toISOString().replace(/T/, " ").replace(/\..+/, "")}]`
 }
 
-// timestamp for crdt
+/**
+ * timestamp for lastmodified field
+ */
 export function ct(): number {
 	return new Date().valueOf()
 }
@@ -29,4 +44,40 @@ export function randint(min: number, max: number): number {
 	min = Math.floor(min)
 	max = Math.floor(max)
 	return min + Math.floor(Math.random() * (max - min))
+}
+
+export function applyFolderIO(item: Item, fullpath: string): boolean {
+	const exists = existsSync(fullpath)
+	if (item.lastAction === AT.Remove && exists) {
+		rmdirSync(fullpath, { recursive: true })
+		return true
+	} else if (item.lastAction === AT.Add && !exists) {
+		mkdirSync(fullpath, { recursive: true })
+		return true
+	}
+	return false
+}
+
+export function applyFileIO(
+	item: Item,
+	fullpath: string,
+	rs: NodeJS.ReadableStream | null
+): boolean {
+	const exists = existsSync(fullpath)
+	if (item.lastAction === AT.Remove && exists) {
+		rmSync(fullpath)
+		return true
+	} else if (item.lastAction === AT.Add && !exists) {
+		rs?.pipe(createWriteStream(fullpath))
+		return true
+	}
+	return false
+}
+
+export function createRS(
+	item: Item,
+	root: string
+): NodeJS.ReadableStream | null {
+	if (item.type === IT.Dir || item.lastAction === AT.Remove) return null
+	return createReadStream(join(root, item.path))
 }

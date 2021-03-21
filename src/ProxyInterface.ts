@@ -1,25 +1,14 @@
 import { Medium } from "./enums"
-import { NID, Item, Streamable, ProxyOption } from "./interfaces"
+import { NID, Item, ProxyOption } from "./interfaces"
 import LocalProxy from "./Proxies/LocalProxy"
 import Proxy from "./Proxies/Proxy"
 import HTTPProxy from "./Proxies/HTTPProxy"
 
-// TODO: extend Array<Proxy>?
-export default class ProxyInterface {
-	peers: Proxy[] = []
-
-	serialize(): { nid: NID; admin: boolean }[] {
-		return this.peers
-			.filter(p => p instanceof HTTPProxy)
-			.map(p => {
-				return { nid: (p as HTTPProxy).nid, admin: p.admin }
-			})
-	}
-
+export default class ProxyInterface extends Array<Proxy> {
 	addNode(type: Medium, data: ProxyOption): Proxy {
 		const proxy = this.createProxy(type, data)
 		if (!proxy) throw Error("NetworkInterface.addNode: null from createProxy")
-		this.peers.push(proxy)
+		this.push(proxy)
 		return proxy
 	}
 
@@ -37,10 +26,18 @@ export default class ProxyInterface {
 	}
 
 	removeNode(proxy: Proxy): void {
-		this.peers = this.peers.filter(p => p !== proxy)
+		const i = this.indexOf(proxy)
+		if (i === -1) throw Error("ProxyInterface.removeNode: not in array")
+		this.splice(i, 1)
 	}
 
-	broadcast(item: Item, rs: Streamable | null): void {
-		this.peers.forEach(p => p.send(item, rs))
+	broadcast(item: Item, rs: NodeJS.ReadableStream | null): void {
+		this.forEach(p => p.send(item, rs))
+	}
+
+	serialize(): { nid: NID; admin: boolean }[] {
+		return this.filter(p => p instanceof HTTPProxy).map(p => {
+			return { nid: (p as HTTPProxy).nid, admin: p.admin }
+		})
 	}
 }

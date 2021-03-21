@@ -1,13 +1,11 @@
-import { Socket } from "net"
-import { ReadStream } from "fs"
 import {
 	TombType,
 	ItemType,
 	ActionType,
 	ResolveOption,
 	SHARE_TYPE,
+	ResponseCode,
 } from "./enums"
-import { IncomingMessage } from "http"
 import Vessel from "./Vessel"
 
 // ---------------- Vessel ----------------
@@ -25,12 +23,25 @@ export interface Settings {
 	sharetype: SHARE_TYPE
 	privs: Privileges
 	ignores: string[]
+	// TODO: add loggerconf
 }
 
-export interface StartupOptions {
+export interface StartupFlags {
 	init: boolean
 	skip: boolean
 	check: boolean
+}
+
+export interface LoggerConfig {
+	init?: boolean
+	ready?: boolean
+	update?: boolean
+	send?: boolean
+	local?: boolean
+	remote?: boolean
+	error?: boolean
+	online?: boolean
+	vanish?: boolean
 }
 
 // ---------------- CARGOLIST ----------------
@@ -73,22 +84,25 @@ export interface NID {
 	port: number
 }
 
-export type Streamable =
-	| ReadStream
-	| Socket
-	| IncomingMessage
-	| NodeJS.ReadableStream
-
 export interface ProxyOption {
 	vessel?: Vessel
 	nid?: NID
 	admin?: boolean
 }
 
-export interface INVITE_RESPONSE {
+export interface InviteResponse {
 	sharetype: SHARE_TYPE
 	peers: NID[]
 }
+
+// ---------------- PROXY ----------------
+export type PStreamable =
+	| NodeJS.ReadableStream
+	| Promise<NodeJS.ReadableStream>
+	| null
+export type PIndexArray = IndexArray | Promise<IndexArray>
+export type PInviteResponse = InviteResponse | Promise<InviteResponse>
+export type PResponseCode = ResponseCode | Promise<ResponseCode>
 
 // ---------------- RESOLVES ----------------
 export interface Resolution {
