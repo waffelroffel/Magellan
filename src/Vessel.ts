@@ -1,5 +1,5 @@
 import { watch as chokidar } from "chokidar"
-import { FSWatcher, createReadStream, writeFileSync, readFileSync } from "fs"
+import { FSWatcher, writeFileSync, readFileSync } from "fs"
 import { join, sep } from "path"
 import { v4 as uuid4 } from "uuid"
 import { ABCVessel } from "./Proxies/ABCVessel"
@@ -72,11 +72,15 @@ export default class Vessel extends ABCVessel {
 	ignores: Set<string>
 	nid: NID
 	loggerconf: LoggerConfig
+	online = false
 	//admin: boolean
 
 	private _watcher?: FSWatcher
 	private _server?: VesselServer
 	private _sharetype?: ST
+	private _setupready?: Promise<void>
+
+	private afterOnline?: () => {}
 
 	constructor(user: string, root: string, loggerconf?: LoggerConfig) {
 		super()
@@ -121,29 +125,40 @@ export default class Vessel extends ABCVessel {
 		return this.resolve(this._server)
 	}
 
-	rejoin(addnew = false): Vessel {
-		this.load()
-		this._server = new VesselServer(this, this.nid.host, this.nid.port)
-		this.startupFlags.skip = !addnew // TODO: use file hash to determine new files
-		this.startupFlags.check = true
-		this.index.mergewithlocal() // Assuming no changes when process is not running
-		return this.startServer()
+	private get setupready(): Promise<void> {
+		return this.resolve(this._setupready)
 	}
 
-	join(nid: NID, addlocal = false): Vessel {
+	rejoin(addnew = false): Vessel {
+		this.loadSettings()
+		this.index.mergewithlocal()
 		this._server = new VesselServer(this, this.nid.host, this.nid.port)
-		this.startupFlags.skip = !addlocal // TODO: use file hash to determine new files
-		return this.startServer(() => {
-			this.joinvia(nid)
-		})
+		this.startupFlags.skip = !addnew // TODO: add local files after joining
+		this.startupFlags.check = true
+		this._setupready = this.setupEvents()
+		return this
+	}
+
+	join(nid: NID): Vessel {
+		this._server = new VesselServer(this, this.nid.host, this.nid.port)
+		this.startupFlags.skip = true // overlaps with priv.write in applyLocal
+		this._setupready = this.setupEvents()
+		this.afterOnline = () => this.joinvia(nid)
+		return this
 	}
 
 	new(sharetype: ST): Vessel {
 		this._server = new VesselServer(this, this.nid.host, this.nid.port)
 		this._sharetype = sharetype
 		this.privs.write = true
+		this._setupready = this.setupEvents()
 		this.save()
-		return this.startServer()
+		return this
+	}
+
+	connect(): Vessel {
+		this.startServer(this.afterOnline)
+		return this
 	}
 
 	vanish(): void {
@@ -151,30 +166,25 @@ export default class Vessel extends ABCVessel {
 	}
 
 	exit(): void {
+		this.online = false
 		this.watcher.close()
 		this.server.close()
 		this.save()
 		this.index.save()
 	}
 
-	private joinvia(nid: NID): void {
+	private async joinvia(nid: NID): Promise<void> {
 		const proxy = this.proxyinterface.addNode(Medium.http, { nid })
-
-		Promise.resolve(proxy.getinvite(this.nid)).then(ir => {
-			this._sharetype = ir.sharetype
-			if (ir.sharetype === ST.All2All) this.privs.write = true
-			ir.peers.forEach(nid => this.proxyinterface.addNode(Medium.http, { nid }))
-			this.save()
-		})
-
-		Promise.resolve(proxy.fetchIndex()).then(index =>
-			this.updateCargo(index, proxy)
-		)
-
-		//TODO: option to add local files after joining
+		const ir = await proxy.getinvite(this.nid)
+		if (!ir) throw Error("request denied") // TODO
+		this._sharetype = ir.sharetype
+		if (ir.sharetype === ST.All2All) this.privs.write = true // TODO
+		ir.peers.forEach(nid => this.proxyinterface.addNode(Medium.http, { nid }))
+		this.updateCargo(await proxy.fetchIndex(), proxy)
+		this.save()
 	}
 
-	load(): Vessel {
+	loadSettings(): Vessel {
 		const data = readFileSync(this.settingsPath, { encoding: "utf8" })
 		const settings: Settings = JSON.parse(data)
 		this.user = settings.user
@@ -232,22 +242,17 @@ export default class Vessel extends ABCVessel {
 		if (print) console.log(cts(), this.user, ...msg)
 	}
 
-	private startServer(post?: () => void): Vessel {
-		Promise.resolve(this.setupEvents())
-			.then(() => {
-				this.server.listen(info =>
-					this.logger(this.loggerconf.online, "ONLINE", info)
-				)
-				post?.()
-			})
-			.catch((e: Error) =>
-				this.logger(this.loggerconf.error, "ERROR", e.message)
-			)
-		return this
+	private async startServer(post?: () => void): Promise<void> {
+		await this.setupready
+		this.server.listen(info => {
+			this.logger(this.loggerconf.online, "ONLINE", info)
+			this.online = true
+		})
+		post?.()
 	}
 
 	private setupEvents(): Promise<void> {
-		return new Promise((resolve, rejects) => {
+		return new Promise(resolve => {
 			this._watcher = chokidar(this.root, { persistent: true })
 				.on("add", (path: string) => this.applyLocal(path, IT.File, AT.Add))
 				.on("change", (path: string) =>
@@ -262,7 +267,9 @@ export default class Vessel extends ABCVessel {
 					if (this.rootarr.some((p, i) => p !== patharr[i])) return // when deleting folder with files, full path is returned
 					this.applyLocal(path, IT.Dir, AT.Remove)
 				}) // TODO: error when deleting folder with folders due to order of deletion parent->child
-				.on("error", rejects) // TODO: when empty folder gets deleted throws error
+				.on("error", e =>
+					this.logger(this.loggerconf.error, "ERROR", e.message)
+				) // TODO: when empty folder gets deleted throws error
 				.on("ready", () => {
 					this.startupFlags.init = false
 					this.startupFlags.skip = false
@@ -275,7 +282,7 @@ export default class Vessel extends ABCVessel {
 		})
 	}
 
-	private checkFile(path: string, type: IT): boolean {
+	private exists(path: string, type: IT): boolean {
 		switch (type) {
 			case IT.File:
 				return this.index.getLatest(path)?.hash === computehash(path)
@@ -289,7 +296,7 @@ export default class Vessel extends ABCVessel {
 	private applyLocal(path: string, type: IT, action: AT): void {
 		if (!this.privs.write) return
 		if (this.ignores.has(path)) return
-		if (this.startupFlags.check && this.checkFile(path, type)) return
+		if (this.startupFlags.check && this.exists(path, type)) return
 		if (this.skiplist.delete(path) || this.startupFlags.skip) return
 
 		const item = CargoList.newItem(
@@ -308,12 +315,14 @@ export default class Vessel extends ABCVessel {
 
 		//this.log.push(item, this.user)
 		this.index.apply(item) // TODO: const ress = this.index.apply(item), when implementing other resolve policies
-		// TODO: clean
-		const lcond =
-			(this.loggerconf.local && !this.startupFlags.init) ||
-			(this.loggerconf.init && this.startupFlags.init)
-		this.logger(lcond, action, path)
-		if (this.startupFlags.init) return
+		this.logger(
+			(this.loggerconf.init && this.startupFlags.init) ||
+				(this.loggerconf.local && !this.startupFlags.init),
+			"->",
+			action,
+			item.path
+		)
+		if (!this.online || this.startupFlags.init) return
 		this.index.save()
 		this.proxyinterface.broadcast(item, this.getRS(item))
 	}
@@ -323,7 +332,7 @@ export default class Vessel extends ABCVessel {
 		if (this.ignores.has(item.path))
 			throw Error(`Vessel.applyIncoming: got ${item.path}`)
 		const ress = this.index.apply(item)
-		this.logger(this.loggerconf.remote, "REMOTE", item.lastAction, item.path)
+		this.logger(this.loggerconf.remote, "<-", item.lastAction, item.path)
 		if (!ress[0].new && ress[0].ro === RO.LWW && !ress[0].io) return
 
 		this.applyIO(item, join(this.root, item.path), rs)
@@ -338,7 +347,7 @@ export default class Vessel extends ABCVessel {
 		fullpath: string,
 		rs: NodeJS.ReadableStream | null
 	) {
-		this.skiplist.add(fullpath) // TODO: check if unnecessary adds are removed
+		this.skiplist.add(fullpath)
 		if (item.type === IT.Dir && !applyFolderIO(item, fullpath))
 			this.skiplist.delete(fullpath)
 		else if (item.type === IT.File && !applyFileIO(item, fullpath, rs))
@@ -354,45 +363,38 @@ export default class Vessel extends ABCVessel {
 	addVessel(type: Medium, data: { vessel?: Vessel; nid?: NID }): void {
 		const proxy = this.proxyinterface.addNode(type, data)
 		Promise.resolve(proxy.fetchIndex()).then(ia => this.updateCargo(ia, proxy))
-		this.save()
 	}
 
-	private updateCargo(data: PIndexArray, proxy: Proxy): void {
+	private async updateCargo(data: PIndexArray, proxy: Proxy): Promise<void> {
 		this.logger(this.loggerconf.update, "UPDATING")
 
-		Promise.resolve(data).then(arr => {
-			const items = arr
-				.flatMap(kv => kv[1])
-				.map(i => {
-					const ress = this.index.apply(i)
-					if (ress.length !== 1) throw Error()
-					return ress[0]
-				})
-				.filter(res => (res.same === undefined ? true : !res.same && res.io))
-				.map(res => res.after) // TODO: clean
+		const index = await data
+		const items = index
+			.flatMap(kv => kv[1])
+			.map(i => this.index.apply(i)[0]) // FIXME: temp for lww
+			.filter(res => (res.same === undefined ? true : !res.same && res.io))
+			.map(res => res.after) // TODO: clean
+		this.index.save()
 
-			proxy.fetch(items).forEach((pr, i) => {
-				const item = items[i]
-				const full = join(this.root, item.path)
-				Promise.resolve(pr).then(rs => this.applyIO(item, full, rs))
-				this.index.save()
-			})
+		proxy.fetch(items).forEach(async (prs, i) => {
+			this.applyIO(items[i], join(this.root, items[i].path), await prs)
 		})
 	}
 }
 
 if (require.main === module) {
 	const lconf = {
-		//init: false,
+		init: false,
 		//ready: false,
-		//update: false,
+		update: false,
 		//local: false,
-		//send: false,
-		//online: false,
+		send: false,
+		online: false,
 	}
-	const evan = new Vessel("evan", join("testroot", "evan"), lconf).new(
-		ST.All2All
-	)
+	const evan = new Vessel("evan", join("testroot", "evan"), lconf)
+		.new(ST.All2All)
+		.connect()
 	const dave = new Vessel("dave", join("testroot", "dave"), lconf)
-	setTimeout(() => dave.join(evan.nid), 1000)
+		.join(evan.nid)
+		.connect()
 }

@@ -96,7 +96,7 @@ export interface InviteResponse {
 }
 
 // ---------------- PROXY ----------------
-export type PStreamable =
+export type PReadable =
 	| NodeJS.ReadableStream
 	| Promise<NodeJS.ReadableStream>
 	| null

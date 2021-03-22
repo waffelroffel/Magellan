@@ -5,7 +5,7 @@ import {
 	PIndexArray,
 	PInviteResponse,
 	PResponseCode,
-	PStreamable,
+	PReadable,
 } from "../interfaces"
 import { ABCVessel } from "./ABCVessel"
 
@@ -14,7 +14,7 @@ export default abstract class Proxy extends ABCVessel {
 	admin: boolean
 
 	abstract send(item: Item, rs: NodeJS.ReadableStream | null): void
-	abstract fetch(items: Item[]): PStreamable[]
+	abstract fetch(items: Item[]): PReadable[]
 	abstract fetchIndex(): PIndexArray
 	abstract getinvite(src: NID): PInviteResponse
 	abstract addPeer(src: NID): PResponseCode

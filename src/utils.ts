@@ -67,7 +67,7 @@ export function applyFileIO(
 	if (item.lastAction === AT.Remove && exists) {
 		rmSync(fullpath)
 		return true
-	} else if (item.lastAction === AT.Add && !exists) {
+	} else if (item.lastAction === AT.Add || item.lastAction === AT.Change) {
 		rs?.pipe(createWriteStream(fullpath))
 		return true
 	}
