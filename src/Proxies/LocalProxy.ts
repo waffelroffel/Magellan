@@ -16,12 +16,8 @@ export default class LocalProxy extends Proxy {
 		this.local.applyIncoming(JSON.parse(JSON.stringify(item)), rs)
 	}
 
-	fetch(items: Item[]): (NodeJS.ReadableStream | null)[] {
-		return items.map(i => {
-			const rs = this.local.getRS(i)
-			if (rs) return rs
-			else throw Error("LocalProxy.fetch: failed to create ReadableStream")
-		})
+	fetchItems(items: Item[]): (NodeJS.ReadableStream | null)[] {
+		return items.map(i => this.local.getRS(i))
 	}
 
 	fetchIndex(): IndexArray {
@@ -31,11 +27,13 @@ export default class LocalProxy extends Proxy {
 	getinvite(): InviteResponse {
 		return {
 			sharetype: this.local.sharetype,
-			peers: this.local.proxyinterface.serialize().map(p => p.nid),
+			peers: this.local.proxylist.serialize().map(p => p.nid),
+			privs: this.local.genDefaultPrivs(),
 		}
 	}
 
-	addPeer(): ResponseCode {
-		throw Error("LocalProxy.addPeer: should not be called")
+	addPeer(vessel: Vessel): ResponseCode {
+		this.local.addVessel(vessel)
+		return ResponseCode.OK
 	}
 }

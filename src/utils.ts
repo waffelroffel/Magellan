@@ -9,8 +9,13 @@ import {
 	rmSync,
 } from "fs"
 import { join } from "path"
+import { v4 } from "uuid"
 import { ActionType as AT, ItemType as IT } from "./enums"
 import { Item } from "./interfaces"
+
+export function uuid(): string {
+	return v4()
+}
 
 /**
  * timestamp for log

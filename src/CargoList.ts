@@ -1,6 +1,5 @@
 import { existsSync, readFileSync, writeFileSync } from "fs"
 import { join } from "path"
-import { v4 as uuid4 } from "uuid"
 import {
 	ResolveOption as RO,
 	ItemType as IT,
@@ -17,6 +16,7 @@ import {
 import { LWWDirConfig, LWWFileConfig } from "./ResolvePolicies/defaultconfigs"
 import { makefpmap, makedpmap } from "./ResolvePolicies/ResolvePolicies"
 import { Resolution } from "./interfaces"
+import { uuid } from "./utils"
 
 /**
  * Simple-LWW: all operations are ADD, REM, and CHG. Concurrent file movements will create duplicates across the system
@@ -93,18 +93,38 @@ export default class CargoList {
 			lastModified: ts,
 			lastAction: action,
 			lastActionBy: user,
-			actionId: uuid4(),
+			actionId: this.genActionId(),
 		}
+
 		if (action === AT.Remove) item.tomb = { type: TT.Deleted }
 		return item
 	}
 
+	// TODO:
+	static genActionId(): string {
+		return uuid()
+	}
+
+	/**
+	 * Checking for (type, hash), and (lastAction, tomb)
+	 */
+	static validateItem(item: Item): boolean {
+		if (item.type === IT.Dir && item.hash) return false
+		if (item.type === IT.File && !item.hash) return false
+		if (item.lastAction === AT.Remove && !item.tomb) return false
+		if (item.lastAction !== AT.Remove && item.tomb) return false
+		// TODO: add checks for tomb.type and tomb.movedTo for different ActionType
+		return true
+	}
+
+	// TODO
 	mergewithlocal(): void {
 		if (!existsSync(this.indexpath))
 			throw Error(`CargoList.mergewithlocal: ${this.indexpath} doesn't exist`)
-		const oldindex = JSON.parse(
+		const oldindex: IndexArray = JSON.parse(
 			readFileSync(this.indexpath, { encoding: "utf8" })
-		) as IndexArray
+		)
+
 		oldindex.forEach(([k, v]) => v.forEach(i => this.apply(i)))
 		this.save()
 	}

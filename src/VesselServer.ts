@@ -1,23 +1,11 @@
-import {
-	createServer,
-	IncomingMessage,
-	RequestListener,
-	Server,
-	ServerResponse,
-} from "http"
-import { AddressInfo } from "net"
-import { URL } from "url"
-import {
-	ActionType as AT,
-	ItemType as IT,
-	Medium,
-	toActionType,
-	toItemType,
-	toTombTypes,
-} from "./enums"
-import { InviteResponse, Item } from "./interfaces"
+import fastify, { FastifyInstance } from "fastify"
+import CargoList from "./CargoList"
+import { Medium } from "./enums"
+import { InviteResponse, Item, NID, Sid } from "./interfaces"
+import { uuid } from "./utils"
 import Vessel from "./Vessel"
 
+// TODO: move or remove
 const DEFAULT_SETTINGS = {
 	HOST: "localhost",
 	PORT: 8000,
@@ -26,121 +14,64 @@ const DEFAULT_SETTINGS = {
 export default class VesselServer {
 	host: string
 	port: number
-	base: string
-	server: Server
-	protocol = "http://"
+	server: FastifyInstance
 	vessel: Vessel
+	tempitems = new Map<string, Item>()
 
 	constructor(vessel: Vessel, host?: string, port?: number) {
+		this.vessel = vessel
 		this.host = host ?? DEFAULT_SETTINGS.HOST
 		this.port = port ?? DEFAULT_SETTINGS.PORT
-		this.base = `${this.protocol}${this.host}:${this.port}`
-		this.server = createServer(this.reqLis())
-		this.vessel = vessel
+		this.server = fastify()
+		this.setupRoutes()
+		this.server.addContentTypeParser("application/binary", (r, q, d) => d(null))
 	}
 
-	listen(post: (nid: string | AddressInfo | null) => void) {
-		this.server.listen(this.port, this.host, () => {
-			post(this.server.address())
-		})
+	listen(): Promise<string> {
+		return this.server.listen(this.port, this.host)
 	}
 
-	close() {
+	close(): void {
 		this.server.close()
 	}
 
-	private reqLis(): RequestListener {
-		return (req, res) => {
-			if (req.method === "POST") this.reqPOST(req, res)
-			else if (req.method === "GET") this.reqGET(req, res)
-			else throw Error(`VesselServer.reqLis: ${req.method} unsupported`)
-		}
-	}
+	// TODO: add proper generics
+	private setupRoutes(): void {
+		this.server.get("/index", async () => this.vessel.index.serialize())
 
-	private reqGET(req: IncomingMessage, res: ServerResponse): void {
-		const params = this.getParams(req)
-		const get = params.get("get")
-		if (get === "index") return res.end(this.vessel.index.serialize())
-		if (get === "nids") return this.getInvite(params, res)
+		this.server.post<{ Body: NID }>("/invite", async req => {
+			const ir: InviteResponse = {
+				sharetype: this.vessel.sharetype,
+				peers: this.vessel.proxylist.serialize().map(p => p.nid),
+				privs: this.vessel.genDefaultPrivs(),
+			}
+			this.vessel.proxylist.addNode(Medium.http, {
+				nid: req.body,
+			})
+			return ir
+		})
 
-		const cparams = this.checkCoreParams(params)
-		if (!cparams) return res.destroy() // TODO: add error message
+		this.server.post<{ Body: Item }>("/item", async req => {
+			if (!CargoList.validateItem(req.body))
+				return { error: "Illegal item state" }
+			const rs = this.vessel.getRS(req.body)
+			return rs ?? { error: "trying to get folder or deleted item" }
+		})
 
-		const item = this.makeItem(cparams)
-		if (item.lastAction === AT.Remove) return res.destroy() // TODO: error message: illegal argument
-		// TODO: add hash and validate file before creating stream
-		this.vessel.getRS(item)?.pipe(res) ?? res.destroy() // TODO: error message: file not found
-	}
+		this.server.post<{ Body: Item }>("/item/meta", async req => {
+			if (!CargoList.validateItem(req.body))
+				return { error: "Illegal item state" }
+			const sid = uuid()
+			this.tempitems.set(sid, req.body)
+			return { msg: "DATA", sid: sid }
+		})
 
-	private reqPOST(req: IncomingMessage, res: ServerResponse): void {
-		const params = this.getParams(req)
-		const cparams = this.checkCoreParams(params)
-		if (!cparams) return res.destroy() // TODO: add error message: illegal params
-
-		const item = this.makeItem(cparams)
-		if (item.lastAction === AT.Remove && !this.applyTomb(item, params))
-			throw Error()
-		const hash = params.get("hash")
-		if (item.type === IT.File && hash) item.hash = hash
-		// else if (item.type === IT.Folder && hash !== "undefined") throw Error("VesselServer.reqPOST: illegal params")
-
-		this.vessel.applyIncoming(item, req) // TODO: return boolean
-		res.end("Transfer successful")
-	}
-
-	private getInvite(params: URLSearchParams, res: ServerResponse): void {
-		const host = params.get("srchost")
-		const port = params.get("srcport")
-		if (!host || !port) return res.destroy()
-		const ir: InviteResponse = {
-			sharetype: this.vessel.sharetype,
-			peers: this.vessel.proxyinterface.serialize().map(p => p.nid),
-		}
-		res.end(JSON.stringify(ir))
-		this.vessel.addVessel(Medium.http, { nid: { host, port: +port } })
-	}
-
-	private getParams(req: IncomingMessage): URLSearchParams {
-		if (!req.url) throw Error()
-		return new URL(req.url, this.base).searchParams
-	}
-
-	private makeItem(params: string[]): Item {
-		return {
-			path: params[0],
-			uuid: params[1],
-			type: toItemType(params[2]),
-			lastModified: parseInt(params[3]),
-			lastAction: toActionType(params[4]),
-			lastActionBy: params[5],
-			actionId: params[6],
-		}
-	}
-
-	private checkCoreParams(params: URLSearchParams): string[] | null {
-		const cparams = [
-			params.get("path"),
-			params.get("uuid"),
-			params.get("type"),
-			params.get("lastModified"),
-			params.get("lastAction"),
-			params.get("lastActionBy"),
-			params.get("actionId"),
-		]
-
-		return cparams.every(Boolean) ? (cparams as string[]) : null
-	}
-
-	private checkTombParams(params: URLSearchParams): (string | null)[] | null {
-		const tparams = [params.get("tombtype"), params.get("movedto")]
-		return !tparams[0] && tparams[1] ? null : tparams
-	}
-
-	private applyTomb(item: Item, params: URLSearchParams): boolean {
-		const tparams = this.checkTombParams(params)
-		if (!tparams || !tparams[0]) return false
-		item.tomb = { type: toTombTypes(tparams[0]) }
-		if (tparams[1]) item.tomb.movedTo = tparams[1]
-		return true
+		// TODO: add schema for body
+		this.server.post<{ Params: Sid }>("/item/data/:sid", async req => {
+			const item = this.tempitems.get(req.params.sid)
+			if (!item) return { error: "item not in templist" }
+			this.vessel.applyIncoming(item, req.raw) // TODO: return boolean ?
+			return { msg: "Transfer succesfull" }
+		})
 	}
 }

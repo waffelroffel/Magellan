@@ -1,8 +1,6 @@
 import { watch as chokidar } from "chokidar"
 import { FSWatcher, writeFileSync, readFileSync } from "fs"
 import { join, sep } from "path"
-import { v4 as uuid4 } from "uuid"
-import { ABCVessel } from "./Proxies/ABCVessel"
 import CargoList from "./CargoList"
 import {
 	ItemType as IT,
@@ -29,9 +27,11 @@ import {
 	applyFolderIO,
 	applyFileIO,
 	createRS,
+	uuid,
 } from "./utils"
 import Proxy from "./Proxies/Proxy"
 import VesselServer from "./VesselServer"
+import LocalProxy from "./Proxies/LocalProxy"
 
 const TABLE_END = "indextable.json"
 const SETTINGS_END = "settings.json"
@@ -55,7 +55,7 @@ const DEFAULT_LOGGER: LoggerConfig = {
  * - matching file hashes needs to be handled differently
  *
  */
-export default class Vessel extends ABCVessel {
+export default class Vessel {
 	user: string
 	root: string
 	rooti: number
@@ -67,8 +67,8 @@ export default class Vessel extends ABCVessel {
 	index: CargoList
 	skiplist = new Set<string>()
 	startupFlags: StartupFlags = { init: true, skip: false, check: false }
-	proxyinterface = new ProxyInterface()
-	privs: Privileges = { read: true, write: false }
+	proxylist = new ProxyInterface()
+	privs: Privileges = { read: false, write: false }
 	ignores: Set<string>
 	nid: NID
 	loggerconf: LoggerConfig
@@ -76,14 +76,13 @@ export default class Vessel extends ABCVessel {
 	//admin: boolean
 
 	private _watcher?: FSWatcher
-	private _server?: VesselServer
+	private _server?: VesselServer // TODO: move inside contructor?
 	private _sharetype?: ST
 	private _setupready?: Promise<void>
 
 	private afterOnline?: () => {}
 
 	constructor(user: string, root: string, loggerconf?: LoggerConfig) {
-		super()
 		this.user = user
 		this.root = root
 		this.rooti = root.length
@@ -150,14 +149,16 @@ export default class Vessel extends ABCVessel {
 	new(sharetype: ST): Vessel {
 		this._server = new VesselServer(this, this.nid.host, this.nid.port)
 		this._sharetype = sharetype
-		this.privs.write = true
+		this.privs = { write: true, read: true } // TODO: moved to genDefaultPrivs
 		this._setupready = this.setupEvents()
 		this.save()
 		return this
 	}
 
 	connect(): Vessel {
-		this.startServer(this.afterOnline)
+		this.startServer().then(() => {
+			this.afterOnline?.()
+		})
 		return this
 	}
 
@@ -174,13 +175,17 @@ export default class Vessel extends ABCVessel {
 	}
 
 	private async joinvia(nid: NID): Promise<void> {
-		const proxy = this.proxyinterface.addNode(Medium.http, { nid })
+		const proxy = this.proxylist.addNode(Medium.http, { nid })
 		const ir = await proxy.getinvite(this.nid)
 		if (!ir) throw Error("request denied") // TODO
 		this._sharetype = ir.sharetype
-		if (ir.sharetype === ST.All2All) this.privs.write = true // TODO
-		ir.peers.forEach(nid => this.proxyinterface.addNode(Medium.http, { nid }))
-		this.updateCargo(await proxy.fetchIndex(), proxy)
+		this.privs = ir.privs
+		ir.peers
+			.filter(nid => !this.proxylist.has(nid))
+			.forEach(nid =>
+				this.proxylist.addNode(Medium.http, { nid }).addPeer(this.nid)
+			)
+		this.updateCargo(proxy.fetchIndex(), proxy)
 		this.save()
 	}
 
@@ -197,7 +202,7 @@ export default class Vessel extends ABCVessel {
 		this.settingsPath = settings.settingsPath
 		this.nid = settings.nid
 		settings.peers.forEach(peer =>
-			this.proxyinterface.addNode(Medium.http, {
+			this.proxylist.addNode(Medium.http, {
 				nid: peer.nid,
 				admin: peer.admin,
 			})
@@ -220,7 +225,7 @@ export default class Vessel extends ABCVessel {
 			settingsEnd: this.settingsEnd,
 			settingsPath: this.settingsPath,
 			nid: this.nid,
-			peers: this.proxyinterface.serialize(),
+			peers: this.proxylist.serialize(),
 			sharetype: this.sharetype,
 			privs: this.privs,
 			ignores: [...this.ignores],
@@ -242,13 +247,10 @@ export default class Vessel extends ABCVessel {
 		if (print) console.log(cts(), this.user, ...msg)
 	}
 
-	private async startServer(post?: () => void): Promise<void> {
+	private async startServer(): Promise<void> {
 		await this.setupready
-		this.server.listen(info => {
-			this.logger(this.loggerconf.online, "ONLINE", info)
-			this.online = true
-		})
-		post?.()
+		this.logger(this.loggerconf.online, "ONLINE", await this.server.listen())
+		this.online = true
 	}
 
 	private setupEvents(): Promise<void> {
@@ -301,7 +303,7 @@ export default class Vessel extends ABCVessel {
 
 		const item = CargoList.newItem(
 			this.removeRoot(path),
-			uuid4(),
+			uuid(),
 			type,
 			ct(),
 			action,
@@ -322,9 +324,8 @@ export default class Vessel extends ABCVessel {
 			action,
 			item.path
 		)
-		if (!this.online || this.startupFlags.init) return
-		this.index.save()
-		this.proxyinterface.broadcast(item, this.getRS(item))
+		if (!this.startupFlags.init) this.index.save()
+		if (this.online) this.proxylist.broadcast(item, this.getRS(item))
 	}
 
 	applyIncoming(item: Item, rs: NodeJS.ReadableStream | null): void {
@@ -360,25 +361,34 @@ export default class Vessel extends ABCVessel {
 		return rs
 	}
 
-	addVessel(type: Medium, data: { vessel?: Vessel; nid?: NID }): void {
-		const proxy = this.proxyinterface.addNode(type, data)
-		Promise.resolve(proxy.fetchIndex()).then(ia => this.updateCargo(ia, proxy))
+	/**
+	 * localproxy only
+	 */
+	addVessel(vessel: Vessel): void {
+		const proxy = this.proxylist.addNode(Medium.local, { vessel })
+		if (!(proxy instanceof LocalProxy))
+			throw Error("Vessel.addVessel: not localproxy")
+		this.updateCargo(proxy.fetchIndex(), proxy)
+		proxy.addPeer(vessel) // TODO:
 	}
 
-	private async updateCargo(data: PIndexArray, proxy: Proxy): Promise<void> {
+	private async updateCargo(index: PIndexArray, proxy: Proxy): Promise<void> {
 		this.logger(this.loggerconf.update, "UPDATING")
 
-		const index = await data
-		const items = index
+		const items = (await index)
 			.flatMap(kv => kv[1])
 			.map(i => this.index.apply(i)[0]) // FIXME: temp for lww
 			.filter(res => (res.same === undefined ? true : !res.same && res.io))
 			.map(res => res.after) // TODO: clean
 		this.index.save()
 
-		proxy.fetch(items).forEach(async (prs, i) => {
+		proxy.fetchItems(items).forEach(async (prs, i) => {
 			this.applyIO(items[i], join(this.root, items[i].path), await prs)
 		})
+	}
+
+	genDefaultPrivs(): { write: boolean; read: boolean } {
+		return { write: this.sharetype === ST.All2All, read: true }
 	}
 }
 

@@ -92,6 +92,7 @@ export interface ProxyOption {
 
 export interface InviteResponse {
 	sharetype: SHARE_TYPE
+	privs: { write: boolean; read: boolean }
 	peers: NID[]
 }
 
@@ -135,4 +136,12 @@ export interface DirRPConfig {
 export interface Privileges {
 	read: boolean
 	write: boolean
+}
+
+// ---------------- SERVER ----------------
+export interface Sid {
+	sid: string
+}
+export interface MetaBody extends Sid {
+	msg: string
 }

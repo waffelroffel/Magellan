@@ -1,12 +1,6 @@
 import fetch from "node-fetch"
-import {
-	ItemType as IT,
-	Medium,
-	ResponseCode,
-	SHARE_TYPE,
-	toShareType,
-} from "../enums"
-import { Item, IndexArray, Tomb, NID, InviteResponse } from "../interfaces"
+import { ItemType as IT, Medium, ResponseCode } from "../enums"
+import { Item, IndexArray, NID, InviteResponse, MetaBody } from "../interfaces"
 import Proxy from "./Proxy"
 
 /**
@@ -20,53 +14,56 @@ export default class HTTPProxy extends Proxy {
 	private host: string
 	private port: number
 	private base: string
+	private urlpostitem: string
+	private urlpostitemmeta: string
+	private urlpostitemdata: string
 	private urlgetindex: string
-	private urlgetnetinfo: string
-	private urlgetnids: string
-	private urlpostpeer: string
+	private urlgetinvite: string
+	private urladdpeer: string
 
 	constructor(host: string, port: number, admin?: boolean) {
 		super(admin)
 		this.host = host
 		this.port = port
 		this.base = `${this.protocol}${host}:${port}`
-		this.urlgetindex = `${this.base}?get=index`
-		this.urlgetnetinfo = `${this.base}?get=netinfo`
-		this.urlgetnids = `${this.base}?get=nids`
-		this.urlpostpeer = `${this.base}?peer=true` // TODO: clean later
+		this.urlpostitem = `${this.base}/item` // get item
+		this.urlpostitemmeta = `${this.base}/item/meta` // send item meta
+		this.urlpostitemdata = `${this.base}/item/data/` // send item data
+		this.urlgetindex = `${this.base}/index`
+		this.urlgetinvite = `${this.base}/invite`
+		this.urladdpeer = `${this.base}/addpeer`
 	}
 
 	get nid(): NID {
 		return { host: this.host, port: this.port }
 	}
 
-	send(item: Item, rs: NodeJS.ReadableStream | null) {
-		fetch(this.makePOST(item), {
+	async send(item: Item, rs: NodeJS.ReadableStream | null): Promise<void> {
+		const res = await fetch(this.urlpostitemmeta, {
 			method: "POST",
-			body: rs ?? undefined,
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify(item),
+		})
+		const resobj: MetaBody = await res.json()
+		await fetch(this.urlpostitemdata + resobj.sid, {
+			method: "POST",
+			headers: { "content-type": "application/binary" },
+			body: rs || undefined, // TODO: clean
 		})
 	}
 
-	private makePOST(item: Item): string {
-		const params = Object.entries(item)
-			.map(([k, v]) => {
-				if (k !== "tomb") return `${k}=${v}`
-				const t = v as Tomb
-				const p = `tombtype=${t.type}`
-				return t.movedTo ? p + `&tombmovedto=${t.movedTo}` : p
-			})
-			.join("&")
-		return `${this.base}?${params}`
+	fetchItems(items: Item[]): (Promise<NodeJS.ReadableStream> | null)[] {
+		return items.map(item =>
+			item.type === IT.File ? this.fetchItem(item) : null
+		)
 	}
 
-	fetch(items: Item[]): (Promise<NodeJS.ReadableStream> | null)[] {
-		return items.map(item =>
-			item.type === IT.File
-				? fetch(this.makePOST(item), {
-						method: "GET",
-				  }).then(res => res.body)
-				: null
-		)
+	private fetchItem(item: Item): Promise<NodeJS.ReadableStream> {
+		return fetch(this.urlpostitem, {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify(item),
+		}).then(res => res.body)
 	}
 
 	fetchIndex(): Promise<IndexArray> {
@@ -75,22 +72,16 @@ export default class HTTPProxy extends Proxy {
 		}).then(res => res.json())
 	}
 
-	fetchNetInfo(): Promise<SHARE_TYPE> {
-		return fetch(this.urlgetnetinfo, {
-			method: "GET",
-		})
-			.then(res => res.text())
-			.then(toShareType)
-	}
-
 	getinvite(src: NID): Promise<InviteResponse> {
-		return fetch(`${this.urlgetnids}&srchost=${src.host}&srcport=${src.port}`, {
-			method: "GET",
+		return fetch(`${this.urlgetinvite}`, {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify(src),
 		}).then(res => res.json())
 	}
 
 	addPeer(nid: NID): Promise<ResponseCode> {
-		return fetch(this.urlpostpeer, {
+		return fetch(this.urladdpeer, {
 			method: "POST",
 			body: JSON.stringify(nid),
 		})

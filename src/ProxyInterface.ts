@@ -12,6 +12,10 @@ export default class ProxyInterface extends Array<Proxy> {
 		return proxy
 	}
 
+	has(nid: NID) {
+		return this.some(p => p instanceof HTTPProxy && p.nid === nid)
+	}
+
 	private createProxy(type: Medium, data: ProxyOption): Proxy | null {
 		switch (type) {
 			case Medium.local:
@@ -37,7 +41,7 @@ export default class ProxyInterface extends Array<Proxy> {
 
 	serialize(): { nid: NID; admin: boolean }[] {
 		return this.filter(p => p instanceof HTTPProxy).map(p => {
-			return { nid: (p as HTTPProxy).nid, admin: p.admin }
+			return { nid: (p as HTTPProxy).nid, admin: p.admin } // TODO: filter
 		})
 	}
 }
