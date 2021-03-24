@@ -1,7 +1,14 @@
 import fastify, { FastifyInstance } from "fastify"
 import CargoList from "./CargoList"
-import { Medium } from "./enums"
-import { InviteResponse, Item, NID, Sid } from "./interfaces"
+import { Medium, ResponseCode as RC } from "./enums"
+import {
+	Item,
+	NID,
+	Invite,
+	Sid,
+	VesselResponse,
+	StreamResponse,
+} from "./interfaces"
 import { uuid } from "./utils"
 import Vessel from "./Vessel"
 
@@ -35,43 +42,68 @@ export default class VesselServer {
 		this.server.close()
 	}
 
-	// TODO: add proper generics
+	// TODO: add response type validation
 	private setupRoutes(): void {
 		this.server.get("/index", async () => this.vessel.index.serialize())
 
-		this.server.post<{ Body: NID }>("/invite", async req => {
-			const ir: InviteResponse = {
-				sharetype: this.vessel.sharetype,
-				peers: this.vessel.proxylist.serialize().map(p => p.nid),
-				privs: this.vessel.genDefaultPrivs(),
+		this.server.post<{ Body: NID; Reply: VesselResponse<Invite> }>(
+			"/invite",
+			async req => {
+				// TODO: move inside Vessel
+				const ir: Invite = {
+					sharetype: this.vessel.sharetype,
+					peers: this.vessel.proxylist.serialize().map(p => p.nid),
+					privs: this.vessel.genDefaultPrivs(),
+				}
+				this.vessel.proxylist.addNode(Medium.http, { nid: req.body })
+				this.vessel.save() // TODO: move inside Vessel
+				return { msg: "Access granted", code: RC.OK, data: ir }
 			}
-			this.vessel.proxylist.addNode(Medium.http, {
-				nid: req.body,
-			})
-			return ir
-		})
+		)
 
-		this.server.post<{ Body: Item }>("/item", async req => {
-			if (!CargoList.validateItem(req.body))
-				return { error: "Illegal item state" }
-			const rs = this.vessel.getRS(req.body)
-			return rs ?? { error: "trying to get folder or deleted item" }
-		})
+		this.server.post<{ Body: Item; Reply: StreamResponse }>(
+			"/item",
+			async req => {
+				if (!CargoList.validateItem(req.body))
+					return { msg: "Illegal item state", code: RC.ERR }
+				const rs = this.vessel.getRS(req.body)
+				return rs ?? { msg: "Item doesn't exist", code: RC.ERR }
+			}
+		)
 
-		this.server.post<{ Body: Item }>("/item/meta", async req => {
-			if (!CargoList.validateItem(req.body))
-				return { error: "Illegal item state" }
-			const sid = uuid()
-			this.tempitems.set(sid, req.body)
-			return { msg: "DATA", sid: sid }
-		})
+		// TODO: fix REM
+		this.server.post<{ Body: Item; Reply: VesselResponse<Sid> }>(
+			"/item/meta",
+			async req => {
+				if (!CargoList.validateItem(req.body))
+					return { msg: "Illegal item state", code: RC.ERR }
+				const sid = uuid()
+				this.tempitems.set(sid, req.body)
+				return { msg: "Send Data with sid", code: RC.OK, data: { sid } }
+			}
+		)
 
 		// TODO: add schema for body
-		this.server.post<{ Params: Sid }>("/item/data/:sid", async req => {
-			const item = this.tempitems.get(req.params.sid)
-			if (!item) return { error: "item not in templist" }
-			this.vessel.applyIncoming(item, req.raw) // TODO: return boolean ?
-			return { msg: "Transfer succesfull" }
-		})
+		this.server.post<{ Params: Sid; Reply: VesselResponse }>(
+			"/item/data/:sid",
+			async req => {
+				const item = this.tempitems.get(req.params.sid)
+				if (!item) return { msg: "Item not in templist", code: RC.ERR }
+				this.vessel.applyIncoming(item, req.raw) // TODO: return boolean ?
+				return { msg: "Transfer successful", code: RC.OK }
+			}
+		)
+
+		this.server.post<{ Body: NID; Reply: VesselResponse }>(
+			"/item/data/addpeer",
+			async req => {
+				// Assuming no updateCargo is needed
+				if (this.vessel.proxylist.has(req.body))
+					return { msg: "Peer already added", code: RC.OK }
+				this.vessel.proxylist.addNode(Medium.http, { nid: req.body })
+				this.vessel.save() // TODO: move inside Vessel
+				return { msg: "Peer added", code: RC.OK }
+			}
+		)
 	}
 }

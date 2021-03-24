@@ -1,5 +1,5 @@
 import { Medium, ResponseCode } from "../enums"
-import { Item, IndexArray, InviteResponse } from "../interfaces"
+import { Item, IndexArray, Invite } from "../interfaces"
 import Vessel from "../Vessel"
 import Proxy from "./Proxy"
 
@@ -24,7 +24,7 @@ export default class LocalProxy extends Proxy {
 		return JSON.parse(this.local.index.serialize())
 	}
 
-	getinvite(): InviteResponse {
+	getinvite(): Invite {
 		return {
 			sharetype: this.local.sharetype,
 			peers: this.local.proxylist.serialize().map(p => p.nid),

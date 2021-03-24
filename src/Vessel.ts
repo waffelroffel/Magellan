@@ -149,7 +149,7 @@ export default class Vessel {
 	new(sharetype: ST): Vessel {
 		this._server = new VesselServer(this, this.nid.host, this.nid.port)
 		this._sharetype = sharetype
-		this.privs = { write: true, read: true } // TODO: moved to genDefaultPrivs
+		this.privs = { write: true, read: true } // TODO: use genDefaultPrivs
 		this._setupready = this.setupEvents()
 		this.save()
 		return this
@@ -209,9 +209,9 @@ export default class Vessel {
 		)
 		this._sharetype = settings.sharetype
 		this.privs = settings.privs
-		this.ignores = new Set<string>()
-		settings.ignores.forEach(path => this.ignores.add(path))
-		return this
+		this.ignores = new Set<string>(settings.ignores)
+		this.loggerconf = settings.loggerconf
+		return this // TODO
 	}
 
 	save(): Vessel {
@@ -229,9 +229,10 @@ export default class Vessel {
 			sharetype: this.sharetype,
 			privs: this.privs,
 			ignores: [...this.ignores],
+			loggerconf: this.loggerconf,
 		}
 		writeFileSync(this.settingsPath, JSON.stringify(settings))
-		return this
+		return this // TODO
 	}
 
 	private resolve<T>(value: T | undefined): T {

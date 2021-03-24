@@ -1,3 +1,4 @@
+import { HeaderInit } from "node-fetch"
 import {
 	TombType,
 	ItemType,
@@ -23,7 +24,7 @@ export interface Settings {
 	sharetype: SHARE_TYPE
 	privs: Privileges
 	ignores: string[]
-	// TODO: add loggerconf
+	loggerconf: LoggerConfig
 }
 
 export interface StartupFlags {
@@ -52,7 +53,7 @@ export interface Tomb {
 
 export interface Item {
 	path: string
-	uuid: string // Buffer
+	uuid: string
 	type: ItemType
 	lastModified: number
 	lastAction: ActionType // TODO: referrence to LOG/ LogItem id
@@ -90,19 +91,13 @@ export interface ProxyOption {
 	admin?: boolean
 }
 
-export interface InviteResponse {
-	sharetype: SHARE_TYPE
-	privs: { write: boolean; read: boolean }
-	peers: NID[]
-}
-
 // ---------------- PROXY ----------------
 export type PReadable =
 	| NodeJS.ReadableStream
 	| Promise<NodeJS.ReadableStream>
 	| null
 export type PIndexArray = IndexArray | Promise<IndexArray>
-export type PInviteResponse = InviteResponse | Promise<InviteResponse>
+export type PInviteResponse = Invite | Promise<Invite>
 export type PResponseCode = ResponseCode | Promise<ResponseCode>
 
 // ---------------- RESOLVES ----------------
@@ -139,9 +134,38 @@ export interface Privileges {
 }
 
 // ---------------- SERVER ----------------
+export interface Invite {
+	sharetype: SHARE_TYPE
+	privs: { write: boolean; read: boolean }
+	peers: NID[]
+}
 export interface Sid {
 	sid: string
 }
-export interface MetaBody extends Sid {
+
+export interface VesselResponse<D = undefined> {
 	msg: string
+	code: ResponseCode
+	data?: D
+}
+
+export type StreamResponse = NodeJS.ReadableStream | VesselResponse
+
+export interface FetchOptions {
+	params?: string
+	body?: NodeJS.ReadableStream | string
+}
+export interface Api {
+	end: string
+	method: string
+	headers?: HeaderInit
+}
+
+export interface VesselAPIs {
+	senditemmeta: Api
+	senditemdata: Api
+	getitem: Api
+	getindex: Api
+	getinvite: Api
+	addpeer: Api
 }

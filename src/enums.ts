@@ -72,7 +72,7 @@ export const enum Medium {
 // ---------------- RESOLVES ----------------
 export const enum ResponseCode {
 	OK = "OK",
-	ERROR = "ERROR",
+	ERR = "ERR",
 }
 
 // ---------------- RESOLVES ----------------

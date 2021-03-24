@@ -1,91 +1,103 @@
-import fetch from "node-fetch"
+import fetch, { Response } from "node-fetch"
 import { ItemType as IT, Medium, ResponseCode } from "../enums"
-import { Item, IndexArray, NID, InviteResponse, MetaBody } from "../interfaces"
+import {
+	Item,
+	IndexArray,
+	NID,
+	Invite,
+	VesselResponse,
+	Sid,
+	Api,
+	FetchOptions,
+	VesselAPIs,
+} from "../interfaces"
 import Proxy from "./Proxy"
 
-/**
- * POST: http://host:port/?...{item=item}
- * GET: http://host:port/?get=index
- * GET: http://host:port/?...{item=item}
- */
+// TODO: put it somewhere else
+export const APIS: VesselAPIs = {
+	senditemmeta: {
+		end: "/item/meta",
+		method: "POST",
+		headers: { "Content-Type": "application/json" },
+	},
+	senditemdata: {
+		end: "/item/data/",
+		method: "POST",
+		headers: { "content-type": "application/binary" },
+	},
+	getitem: {
+		end: "/item",
+		method: "POST",
+		headers: { "Content-Type": "application/json" },
+	},
+	getindex: {
+		end: "/index",
+		method: "GET",
+	},
+	getinvite: {
+		end: "/invite",
+		method: "POST",
+		headers: { "Content-Type": "application/json" },
+	},
+	addpeer: {
+		end: "/addpeer",
+		method: "POST",
+		headers: { "Content-Type": "application/json" },
+	},
+}
+
 export default class HTTPProxy extends Proxy {
 	type = Medium.http
+	nid: NID
 	private protocol = "http://"
-	private host: string
-	private port: number
 	private base: string
-	private urlpostitem: string
-	private urlpostitemmeta: string
-	private urlpostitemdata: string
-	private urlgetindex: string
-	private urlgetinvite: string
-	private urladdpeer: string
 
-	constructor(host: string, port: number, admin?: boolean) {
+	constructor(nid: NID, admin?: boolean) {
 		super(admin)
-		this.host = host
-		this.port = port
-		this.base = `${this.protocol}${host}:${port}`
-		this.urlpostitem = `${this.base}/item` // get item
-		this.urlpostitemmeta = `${this.base}/item/meta` // send item meta
-		this.urlpostitemdata = `${this.base}/item/data/` // send item data
-		this.urlgetindex = `${this.base}/index`
-		this.urlgetinvite = `${this.base}/invite`
-		this.urladdpeer = `${this.base}/addpeer`
+		this.nid = nid
+		this.base = `${this.protocol}${nid.host}:${nid.port}`
 	}
 
-	get nid(): NID {
-		return { host: this.host, port: this.port }
+	private fetch(api: Api, opts?: FetchOptions): Promise<Response> {
+		return fetch(`${this.base}${api.end}${opts?.params ?? ""}`, {
+			method: api.method,
+			headers: api.headers,
+			body: opts?.body,
+		})
 	}
 
-	async send(item: Item, rs: NodeJS.ReadableStream | null): Promise<void> {
-		const res = await fetch(this.urlpostitemmeta, {
-			method: "POST",
-			headers: { "Content-Type": "application/json" },
+	async send(item: Item, rs: NodeJS.ReadableStream): Promise<void> {
+		const res = await this.fetch(APIS.senditemmeta, {
 			body: JSON.stringify(item),
 		})
-		const resobj: MetaBody = await res.json()
-		await fetch(this.urlpostitemdata + resobj.sid, {
-			method: "POST",
-			headers: { "content-type": "application/binary" },
-			body: rs || undefined, // TODO: clean
-		})
+		const resobj: VesselResponse<Sid> = await res.json()
+		if (!resobj.data?.sid) throw Error("HTTPProxy.send: no Sid received") // TODO
+		this.fetch(APIS.senditemdata, { params: resobj.data.sid, body: rs })
 	}
 
 	fetchItems(items: Item[]): (Promise<NodeJS.ReadableStream> | null)[] {
-		return items.map(item =>
-			item.type === IT.File ? this.fetchItem(item) : null
-		)
+		return items.map(i => (i.type === IT.File ? this.fetchItem(i) : null))
 	}
 
 	private fetchItem(item: Item): Promise<NodeJS.ReadableStream> {
-		return fetch(this.urlpostitem, {
-			method: "POST",
-			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify(item),
-		}).then(res => res.body)
+		return this.fetch(APIS.getitem, { body: JSON.stringify(item) }).then(
+			res => res.body
+		)
 	}
 
 	fetchIndex(): Promise<IndexArray> {
-		return fetch(this.urlgetindex, {
-			method: "GET",
-		}).then(res => res.json())
+		return this.fetch(APIS.getindex).then(res => res.json())
 	}
 
-	getinvite(src: NID): Promise<InviteResponse> {
-		return fetch(`${this.urlgetinvite}`, {
-			method: "POST",
-			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify(src),
-		}).then(res => res.json())
+	async getinvite(src: NID): Promise<Invite> {
+		const res = await this.fetch(APIS.getinvite, { body: JSON.stringify(src) })
+		const json: VesselResponse<Invite> = await res.json()
+		if (!json.data) throw Error("HTTPProxy.getinvite: no Invite received") // TODO
+		return json.data
 	}
 
-	addPeer(nid: NID): Promise<ResponseCode> {
-		return fetch(this.urladdpeer, {
-			method: "POST",
-			body: JSON.stringify(nid),
-		})
-			.then(() => ResponseCode.OK)
-			.catch(() => ResponseCode.ERROR)
+	async addPeer(nid: NID): Promise<ResponseCode> {
+		this.fetch(APIS.addpeer, { body: JSON.stringify(nid) })
+		return ResponseCode.OK // FIXME: ¯\_(ツ)_/¯
 	}
 }
