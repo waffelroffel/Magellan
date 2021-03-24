@@ -66,7 +66,7 @@ export function applyFolderIO(item: Item, fullpath: string): boolean {
 export function applyFileIO(
 	item: Item,
 	fullpath: string,
-	rs: NodeJS.ReadableStream | null
+	rs?: NodeJS.ReadableStream
 ): boolean {
 	const exists = existsSync(fullpath)
 	if (item.lastAction === AT.Remove && exists) {

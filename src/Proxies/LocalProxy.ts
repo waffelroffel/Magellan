@@ -12,7 +12,7 @@ export default class LocalProxy extends Proxy {
 		this.local = vessel
 	}
 
-	send(item: Item, rs: NodeJS.ReadableStream | null) {
+	send(item: Item, rs?: NodeJS.ReadableStream) {
 		this.local.applyIncoming(JSON.parse(JSON.stringify(item)), rs)
 	}
 
@@ -34,6 +34,6 @@ export default class LocalProxy extends Proxy {
 
 	addPeer(vessel: Vessel): ResponseCode {
 		this.local.addVessel(vessel)
-		return ResponseCode.OK
+		return ResponseCode.DNE
 	}
 }

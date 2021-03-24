@@ -326,10 +326,11 @@ export default class Vessel {
 			item.path
 		)
 		if (!this.startupFlags.init) this.index.save()
-		if (this.online) this.proxylist.broadcast(item, this.getRS(item))
+		if (this.online)
+			this.proxylist.broadcast(item, this.getRS(item) ?? undefined) // TODO: clean optional chaining
 	}
 
-	applyIncoming(item: Item, rs: NodeJS.ReadableStream | null): void {
+	applyIncoming(item: Item, rs?: NodeJS.ReadableStream): void {
 		if (!this.privs.read) return // TODO: ¯\_(ツ)_/¯
 		if (this.ignores.has(item.path))
 			throw Error(`Vessel.applyIncoming: got ${item.path}`)
@@ -344,11 +345,7 @@ export default class Vessel {
 		//TODO: forward to known peers
 	}
 
-	private applyIO(
-		item: Item,
-		fullpath: string,
-		rs: NodeJS.ReadableStream | null
-	) {
+	private applyIO(item: Item, fullpath: string, rs?: NodeJS.ReadableStream) {
 		this.skiplist.add(fullpath)
 		if (item.type === IT.Dir && !applyFolderIO(item, fullpath))
 			this.skiplist.delete(fullpath)
@@ -384,7 +381,8 @@ export default class Vessel {
 		this.index.save()
 
 		proxy.fetchItems(items).forEach(async (prs, i) => {
-			this.applyIO(items[i], join(this.root, items[i].path), await prs)
+			const fullpath = join(this.root, items[i].path)
+			this.applyIO(items[i], fullpath, (await prs) || undefined) // TODO: clean optional chaining
 		})
 	}
 

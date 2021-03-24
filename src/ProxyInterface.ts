@@ -33,7 +33,7 @@ export default class ProxyInterface extends Array<Proxy> {
 		this.splice(i, 1)
 	}
 
-	broadcast(item: Item, rs: NodeJS.ReadableStream | null): void {
+	broadcast(item: Item, rs?: NodeJS.ReadableStream): void {
 		this.forEach(p => p.send(item, rs))
 	}
 

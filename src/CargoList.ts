@@ -109,11 +109,15 @@ export default class CargoList {
 	 * Checking for (type, hash), and (lastAction, tomb)
 	 */
 	static validateItem(item: Item): boolean {
-		if (item.type === IT.Dir && item.hash) return false
-		if (item.type === IT.File && !item.hash) return false
 		if (item.lastAction === AT.Remove && !item.tomb) return false
 		if (item.lastAction !== AT.Remove && item.tomb) return false
+		if (item.type === IT.Dir && item.hash) return false
+		if (item.type === IT.File) {
+			if (item.lastAction === AT.Remove && item.hash) return false
+			if (item.lastAction !== AT.Remove && !item.hash) return false
+		}
 		// TODO: add checks for tomb.type and tomb.movedTo for different ActionType
+		// TODO: add checks all enum values (isEnum(...))
 		return true
 	}
 
@@ -125,7 +129,7 @@ export default class CargoList {
 			readFileSync(this.indexpath, { encoding: "utf8" })
 		)
 
-		oldindex.forEach(([k, v]) => v.forEach(i => this.apply(i)))
+		oldindex.forEach(kv => kv[1].forEach(i => this.apply(i)))
 		this.save()
 	}
 

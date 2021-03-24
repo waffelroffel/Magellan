@@ -66,12 +66,13 @@ export default class HTTPProxy extends Proxy {
 		})
 	}
 
-	async send(item: Item, rs: NodeJS.ReadableStream): Promise<void> {
+	async send(item: Item, rs?: NodeJS.ReadableStream): Promise<void> {
 		const res = await this.fetch(APIS.senditemmeta, {
 			body: JSON.stringify(item),
 		})
 		const resobj: VesselResponse<Sid> = await res.json()
-		if (!resobj.data?.sid) throw Error("HTTPProxy.send: no Sid received") // TODO
+		if (resobj.code === ResponseCode.DNE) return
+		if (!resobj.data?.sid) throw Error("HTTPProxy.send: no Sid received") // TODO: error logic
 		this.fetch(APIS.senditemdata, { params: resobj.data.sid, body: rs })
 	}
 
@@ -92,12 +93,12 @@ export default class HTTPProxy extends Proxy {
 	async getinvite(src: NID): Promise<Invite> {
 		const res = await this.fetch(APIS.getinvite, { body: JSON.stringify(src) })
 		const json: VesselResponse<Invite> = await res.json()
-		if (!json.data) throw Error("HTTPProxy.getinvite: no Invite received") // TODO
+		if (!json.data) throw Error("HTTPProxy.getinvite: no Invite received") // TODO: error logic
 		return json.data
 	}
 
 	async addPeer(nid: NID): Promise<ResponseCode> {
 		this.fetch(APIS.addpeer, { body: JSON.stringify(nid) })
-		return ResponseCode.OK // FIXME: ¯\_(ツ)_/¯
+		return ResponseCode.DNE // TODO: ¯\_(ツ)_/¯
 	}
 }

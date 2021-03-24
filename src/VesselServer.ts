@@ -1,6 +1,6 @@
 import fastify, { FastifyInstance } from "fastify"
 import CargoList from "./CargoList"
-import { Medium, ResponseCode as RC } from "./enums"
+import { ActionType, Medium, ResponseCode as RC } from "./enums"
 import {
 	Item,
 	NID,
@@ -57,7 +57,7 @@ export default class VesselServer {
 				}
 				this.vessel.proxylist.addNode(Medium.http, { nid: req.body })
 				this.vessel.save() // TODO: move inside Vessel
-				return { msg: "Access granted", code: RC.OK, data: ir }
+				return { msg: "Access granted", code: RC.DNE, data: ir }
 			}
 		)
 
@@ -71,15 +71,18 @@ export default class VesselServer {
 			}
 		)
 
-		// TODO: fix REM
 		this.server.post<{ Body: Item; Reply: VesselResponse<Sid> }>(
 			"/item/meta",
 			async req => {
 				if (!CargoList.validateItem(req.body))
 					return { msg: "Illegal item state", code: RC.ERR }
+				if (req.body.lastAction === ActionType.Remove) {
+					this.vessel.applyIncoming(req.body)
+					return { msg: "Send Data with sid", code: RC.NXT }
+				}
 				const sid = uuid()
 				this.tempitems.set(sid, req.body)
-				return { msg: "Send Data with sid", code: RC.OK, data: { sid } }
+				return { msg: "Send Data with sid", code: RC.NXT, data: { sid } }
 			}
 		)
 
@@ -90,7 +93,7 @@ export default class VesselServer {
 				const item = this.tempitems.get(req.params.sid)
 				if (!item) return { msg: "Item not in templist", code: RC.ERR }
 				this.vessel.applyIncoming(item, req.raw) // TODO: return boolean ?
-				return { msg: "Transfer successful", code: RC.OK }
+				return { msg: "Transfer successful", code: RC.DNE }
 			}
 		)
 
@@ -99,10 +102,10 @@ export default class VesselServer {
 			async req => {
 				// Assuming no updateCargo is needed
 				if (this.vessel.proxylist.has(req.body))
-					return { msg: "Peer already added", code: RC.OK }
+					return { msg: "Peer already added", code: RC.DNE }
 				this.vessel.proxylist.addNode(Medium.http, { nid: req.body })
 				this.vessel.save() // TODO: move inside Vessel
-				return { msg: "Peer added", code: RC.OK }
+				return { msg: "Peer added", code: RC.DNE }
 			}
 		)
 	}

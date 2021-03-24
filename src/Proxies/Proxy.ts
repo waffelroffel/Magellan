@@ -13,7 +13,7 @@ export default abstract class Proxy {
 	abstract type: Medium
 	admin: boolean
 
-	abstract send(item: Item, rs: NodeJS.ReadableStream | null): void
+	abstract send(item: Item, rs?: NodeJS.ReadableStream): void
 	abstract fetchItems(items: Item[]): PReadable[]
 	abstract fetchIndex(): PIndexArray
 	abstract getinvite(src: NID): PInviteResponse
