@@ -1,6 +1,6 @@
 import fastify, { FastifyInstance } from "fastify"
 import CargoList from "./CargoList"
-import { ActionType, Medium, ResponseCode as RC } from "./enums"
+import { ActionType, Medium, PERMISSION, ResponseCode as RC } from "./enums"
 import {
 	Item,
 	NID,
@@ -8,6 +8,8 @@ import {
 	Sid,
 	VesselResponse,
 	StreamResponse,
+	IndexArray,
+	PermissionGrant,
 } from "./interfaces"
 import { uuid } from "./utils"
 import Vessel from "./Vessel"
@@ -44,7 +46,12 @@ export default class VesselServer {
 
 	// TODO: add response type validation
 	private setupRoutes(): void {
-		this.server.get("/index", async () => this.vessel.index.serialize())
+		this.server.get<{ Reply: VesselResponse<IndexArray> }>(
+			"/index",
+			async () => {
+				return { msg: "Index", code: RC.DNE, data: this.vessel.index.asArray() }
+			}
+		)
 
 		this.server.post<{ Body: NID; Reply: VesselResponse<Invite> }>(
 			"/invite",
@@ -56,7 +63,7 @@ export default class VesselServer {
 					privs: this.vessel.genDefaultPrivs(),
 				}
 				this.vessel.proxylist.addNode(Medium.http, { nid: req.body })
-				this.vessel.save() // TODO: move inside Vessel
+				this.vessel.saveSettings() // TODO: move inside Vessel
 				return { msg: "Access granted", code: RC.DNE, data: ir }
 			}
 		)
@@ -78,7 +85,7 @@ export default class VesselServer {
 					return { msg: "Illegal item state", code: RC.ERR }
 				if (req.body.lastAction === ActionType.Remove) {
 					this.vessel.applyIncoming(req.body)
-					return { msg: "Send Data with sid", code: RC.NXT }
+					return { msg: "No further action required", code: RC.DNE }
 				}
 				const sid = uuid()
 				this.tempitems.set(sid, req.body)
@@ -104,9 +111,24 @@ export default class VesselServer {
 				if (this.vessel.proxylist.has(req.body))
 					return { msg: "Peer already added", code: RC.DNE }
 				this.vessel.proxylist.addNode(Medium.http, { nid: req.body })
-				this.vessel.save() // TODO: move inside Vessel
+				this.vessel.saveSettings() // TODO: move inside Vessel
 				return { msg: "Peer added", code: RC.DNE }
 			}
 		)
+
+		this.server.post<{
+			Querystring: { get: PERMISSION }
+			Body: NID
+			Reply: VesselResponse<PermissionGrant>
+		}>("/permission", async req => {
+			if (!this.vessel.isAdmin) return { msg: "Peer not admin", code: RC.ERR }
+			const privreq = req.query.get
+			const grant = this.vessel.grantPrivs(req.body, privreq)
+			return {
+				msg: `${privreq} permission granted`,
+				code: RC.DNE,
+				data: { priv: privreq, grant },
+			}
+		})
 	}
 }

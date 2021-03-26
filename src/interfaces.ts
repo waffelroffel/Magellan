@@ -6,6 +6,7 @@ import {
 	ResolveOption,
 	SHARE_TYPE,
 	ResponseCode,
+	PERMISSION,
 } from "./enums"
 import Vessel from "./Vessel"
 
@@ -20,11 +21,12 @@ export interface Settings {
 	settingsEnd: string
 	settingsPath: string
 	nid: NID
-	peers: { nid: NID; admin: boolean }[]
+	peers: { nid: NID }[]
 	sharetype: SHARE_TYPE
 	privs: Privileges
 	ignores: string[]
 	loggerconf: LoggerConfig
+	admin: boolean
 }
 
 export interface StartupFlags {
@@ -94,11 +96,12 @@ export interface ProxyOption {
 // ---------------- PROXY ----------------
 export type PReadable =
 	| NodeJS.ReadableStream
-	| Promise<NodeJS.ReadableStream>
 	| null
+	| Promise<NodeJS.ReadableStream | null>
 export type PIndexArray = IndexArray | Promise<IndexArray>
 export type PInviteResponse = Invite | Promise<Invite>
 export type PResponseCode = ResponseCode | Promise<ResponseCode>
+export type PPermissionGrant = PermissionGrant | Promise<PermissionGrant>
 
 // ---------------- RESOLVES ----------------
 export interface Resolution {
@@ -168,4 +171,10 @@ export interface VesselAPIs {
 	getindex: Api
 	getinvite: Api
 	addpeer: Api
+	getPriv: Api
+}
+
+export interface PermissionGrant {
+	priv: PERMISSION
+	grant: boolean
 }

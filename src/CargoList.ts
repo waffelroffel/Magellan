@@ -69,15 +69,6 @@ export default class CargoList {
 		console.log(this.index)
 	}
 
-	/**
-	 * only call during creation of network
-	 * @param items
-	 */
-	init(items: Item[]): void {
-		items.forEach(i => this.index.set(i.path, [i]))
-		this.index.delete(this.indexpath)
-	}
-
 	static newItem(
 		path: string,
 		uuid: string,
@@ -121,7 +112,6 @@ export default class CargoList {
 		return true
 	}
 
-	// TODO
 	mergewithlocal(): void {
 		if (!existsSync(this.indexpath))
 			throw Error(`CargoList.mergewithlocal: ${this.indexpath} doesn't exist`)

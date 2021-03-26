@@ -8,7 +8,20 @@ const SHARE_TYPES = [SHARE_TYPE.All2All, SHARE_TYPE.One2Aall]
 
 export const toShareType = (value: string): SHARE_TYPE => {
 	const type = SHARE_TYPES.find(st => st === value)
-	if (!type) throw Error("toShareType: invalid type")
+	if (!type) throw Error("toShareType: invalid value")
+	return type
+}
+
+export const enum PERMISSION {
+	WRITE = "W",
+	READ = "R",
+}
+
+const PERMISSIONS = [PERMISSION.WRITE, PERMISSION.READ]
+
+export const toPermission = (value: string): PERMISSION => {
+	const type = PERMISSIONS.find(st => st === value)
+	if (!type) throw Error("toPermission: invalid value")
 	return type
 }
 
@@ -22,7 +35,7 @@ const ITEM_TYPES = [ItemType.Dir, ItemType.File]
 
 export const toItemType = (value: string): ItemType => {
 	const type = ITEM_TYPES.find(it => it === value)
-	if (!type) throw Error("toItemType: invalid type")
+	if (!type) throw Error("toItemType: invalid value")
 	return type
 }
 
@@ -36,7 +49,7 @@ const TOMB_TYPES = [TombType.Moved, TombType.Renamed, TombType.Deleted]
 
 export const toTombTypes = (value: string): TombType => {
 	const tomb = TOMB_TYPES.find(tt => tt === value)
-	if (!tomb) throw Error("toTombTypes: invalid type")
+	if (!tomb) throw Error("toTombTypes: invalid value")
 	return tomb
 }
 
@@ -58,7 +71,7 @@ const ACTION_TYPES = [
 
 export const toActionType = (value: string): ActionType => {
 	const action = ACTION_TYPES.find(at => at === value)
-	if (!action) throw Error("toActionType: invalid type")
+	if (!action) throw Error("toActionType: invalid value")
 	return action
 }
 

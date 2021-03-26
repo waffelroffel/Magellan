@@ -10,6 +10,7 @@ import {
 	Api,
 	FetchOptions,
 	VesselAPIs,
+	PermissionGrant,
 } from "../interfaces"
 import Proxy from "./Proxy"
 
@@ -44,6 +45,11 @@ export const APIS: VesselAPIs = {
 		method: "POST",
 		headers: { "Content-Type": "application/json" },
 	},
+	getPriv: {
+		end: "/permission",
+		method: "POST",
+		headers: { "Content-Type": "application/json" },
+	},
 }
 
 export default class HTTPProxy extends Proxy {
@@ -53,7 +59,7 @@ export default class HTTPProxy extends Proxy {
 	private base: string
 
 	constructor(nid: NID, admin?: boolean) {
-		super(admin)
+		super()
 		this.nid = nid
 		this.base = `${this.protocol}${nid.host}:${nid.port}`
 	}
@@ -76,29 +82,42 @@ export default class HTTPProxy extends Proxy {
 		this.fetch(APIS.senditemdata, { params: resobj.data.sid, body: rs })
 	}
 
-	fetchItems(items: Item[]): (Promise<NodeJS.ReadableStream> | null)[] {
-		return items.map(i => (i.type === IT.File ? this.fetchItem(i) : null))
+	fetchItems(items: Item[]): Promise<NodeJS.ReadableStream | null>[] {
+		return items.map(i => this.fetchItem(i))
 	}
 
-	private fetchItem(item: Item): Promise<NodeJS.ReadableStream> {
-		return this.fetch(APIS.getitem, { body: JSON.stringify(item) }).then(
-			res => res.body
-		)
+	private async fetchItem(item: Item): Promise<NodeJS.ReadableStream | null> {
+		if (item.type === IT.Dir) return null
+		const res = await this.fetch(APIS.getitem, { body: JSON.stringify(item) })
+		return res.body
 	}
 
-	fetchIndex(): Promise<IndexArray> {
-		return this.fetch(APIS.getindex).then(res => res.json())
+	async fetchIndex(): Promise<IndexArray> {
+		const res = await this.fetch(APIS.getindex)
+		const resobj: VesselResponse<IndexArray> = await res.json()
+		if (!resobj?.data)
+			throw Error("HTTPProxy.fetchIndex: no IndexArray received") // TODO: error logic
+		return resobj.data
 	}
 
 	async getinvite(src: NID): Promise<Invite> {
 		const res = await this.fetch(APIS.getinvite, { body: JSON.stringify(src) })
-		const json: VesselResponse<Invite> = await res.json()
-		if (!json.data) throw Error("HTTPProxy.getinvite: no Invite received") // TODO: error logic
-		return json.data
+		const resobj: VesselResponse<Invite> = await res.json()
+		if (!resobj.data) throw Error("HTTPProxy.getinvite: no Invite received") // TODO: error logic
+		return resobj.data
 	}
 
-	async addPeer(nid: NID): Promise<ResponseCode> {
-		this.fetch(APIS.addpeer, { body: JSON.stringify(nid) })
+	async addPeer(src: NID): Promise<ResponseCode> {
+		this.fetch(APIS.addpeer, { body: JSON.stringify(src) })
 		return ResponseCode.DNE // TODO: ¯\_(ツ)_/¯
+	}
+
+	async getPriv(src: NID): Promise<PermissionGrant> {
+		const res = await this.fetch(APIS.getPriv, { body: JSON.stringify(src) })
+		const resobj: VesselResponse<PermissionGrant> = await res.json()
+		if (resobj.code === ResponseCode.ERR)
+			throw Error("HTTPProxy.getPriv: error code") // TODO: error logic
+		if (!resobj.data) throw Error("HTTPProxy.getPriv: no grant received") // TODO: error logic
+		return resobj.data
 	}
 }

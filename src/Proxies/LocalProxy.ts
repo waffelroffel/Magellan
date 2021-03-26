@@ -1,5 +1,5 @@
 import { Medium, ResponseCode } from "../enums"
-import { Item, IndexArray, Invite } from "../interfaces"
+import { Item, IndexArray, Invite, PermissionGrant } from "../interfaces"
 import Vessel from "../Vessel"
 import Proxy from "./Proxy"
 
@@ -8,7 +8,7 @@ export default class LocalProxy extends Proxy {
 	private local: Vessel
 
 	constructor(vessel: Vessel, admin?: boolean) {
-		super(admin)
+		super()
 		this.local = vessel
 	}
 
@@ -32,8 +32,12 @@ export default class LocalProxy extends Proxy {
 		}
 	}
 
-	addPeer(vessel: Vessel): ResponseCode {
-		this.local.addVessel(vessel)
+	addPeer(src: Vessel): ResponseCode {
+		this.local.addVessel(src)
 		return ResponseCode.DNE
+	}
+
+	getPriv(): PermissionGrant {
+		throw Error("LocalProxy.getPriv: not implemented")
 	}
 }

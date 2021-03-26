@@ -8,6 +8,7 @@ import {
 	Medium,
 	ResolveOption as RO,
 	SHARE_TYPE as ST,
+	PERMISSION,
 } from "./enums"
 import {
 	Item,
@@ -73,7 +74,8 @@ export default class Vessel {
 	nid: NID
 	loggerconf: LoggerConfig
 	online = false
-	//admin: boolean
+
+	private admin = false
 
 	private _watcher?: FSWatcher
 	private _server?: VesselServer // TODO: move inside contructor?
@@ -110,6 +112,10 @@ export default class Vessel {
 			online: conf?.online ?? DEFAULT_LOGGER.online,
 			vanish: conf?.vanish ?? DEFAULT_LOGGER.vanish,
 		}
+	}
+
+	get isAdmin(): boolean {
+		return this.admin
 	}
 
 	get sharetype(): ST {
@@ -150,8 +156,9 @@ export default class Vessel {
 		this._server = new VesselServer(this, this.nid.host, this.nid.port)
 		this._sharetype = sharetype
 		this.privs = { write: true, read: true } // TODO: use genDefaultPrivs
+		this.admin = true
 		this._setupready = this.setupEvents()
-		this.save()
+		this.saveSettings()
 		return this
 	}
 
@@ -170,7 +177,7 @@ export default class Vessel {
 		this.online = false
 		this.watcher.close()
 		this.server.close()
-		this.save()
+		this.saveSettings()
 		this.index.save()
 	}
 
@@ -186,7 +193,7 @@ export default class Vessel {
 				this.proxylist.addNode(Medium.http, { nid }).addPeer(this.nid)
 			)
 		this.updateCargo(proxy.fetchIndex(), proxy)
-		this.save()
+		this.saveSettings()
 	}
 
 	loadSettings(): Vessel {
@@ -202,19 +209,17 @@ export default class Vessel {
 		this.settingsPath = settings.settingsPath
 		this.nid = settings.nid
 		settings.peers.forEach(peer =>
-			this.proxylist.addNode(Medium.http, {
-				nid: peer.nid,
-				admin: peer.admin,
-			})
+			this.proxylist.addNode(Medium.http, { nid: peer.nid })
 		)
 		this._sharetype = settings.sharetype
 		this.privs = settings.privs
 		this.ignores = new Set<string>(settings.ignores)
 		this.loggerconf = settings.loggerconf
-		return this // TODO
+		this.admin = settings.admin
+		return this
 	}
 
-	save(): Vessel {
+	saveSettings(): Vessel {
 		const settings: Settings = {
 			user: this.user,
 			root: this.root,
@@ -230,9 +235,10 @@ export default class Vessel {
 			privs: this.privs,
 			ignores: [...this.ignores],
 			loggerconf: this.loggerconf,
+			admin: this.admin,
 		}
 		writeFileSync(this.settingsPath, JSON.stringify(settings))
-		return this // TODO
+		return this
 	}
 
 	private resolve<T>(value: T | undefined): T {
@@ -388,6 +394,11 @@ export default class Vessel {
 
 	genDefaultPrivs(): { write: boolean; read: boolean } {
 		return { write: this.sharetype === ST.All2All, read: true }
+	}
+
+	// TODO
+	grantPrivs(nid: NID, priv: PERMISSION): boolean {
+		return false
 	}
 }
 
