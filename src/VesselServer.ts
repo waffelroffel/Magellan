@@ -32,6 +32,7 @@ export default class VesselServer {
 		this.host = host ?? DEFAULT_SETTINGS.HOST
 		this.port = port ?? DEFAULT_SETTINGS.PORT
 		this.server = fastify()
+		this.setupClientApi()
 		this.setupRoutes()
 		this.server.addContentTypeParser("application/binary", (r, q, d) => d(null))
 	}
@@ -42,6 +43,31 @@ export default class VesselServer {
 
 	close(): void {
 		this.server.close()
+	}
+
+	private setupClientApi(): void {
+		this.server.post<{ Querystring: { cmd: string }; Reply: VesselResponse }>(
+			"/",
+			async req => {
+				if (req.hostname.split(":")[0] !== "localhost")
+					return { msg: "no remote execution", code: RC.ERR }
+				switch (req.query.cmd) {
+					case "connect":
+						return { msg: `vessel nid: ${this.vessel.nid}`, code: RC.DNE }
+					case "connect":
+						this.vessel.connect()
+						return { msg: "vessel online", code: RC.DNE }
+					case "exit":
+						this.vessel.exit()
+						return { msg: "vessel offline", code: RC.DNE }
+					case "vanish":
+						this.vessel.vanish()
+						return { msg: "vessel vanished", code: RC.DNE }
+					default:
+						return { msg: "unknown cmd", code: RC.DNE }
+				}
+			}
+		)
 	}
 
 	// TODO: add response type validation

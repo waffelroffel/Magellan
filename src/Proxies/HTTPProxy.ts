@@ -64,18 +64,23 @@ export default class HTTPProxy extends Proxy {
 		this.base = `${this.protocol}${nid.host}:${nid.port}`
 	}
 
-	private fetch(api: Api, opts?: FetchOptions): Promise<Response> {
-		return fetch(`${this.base}${api.end}${opts?.params ?? ""}`, {
-			method: api.method,
-			headers: api.headers,
-			body: opts?.body,
-		})
+	private async fetch(api: Api, opts?: FetchOptions): Promise<Response | null> {
+		try {
+			return await fetch(`${this.base}${api.end}${opts?.params ?? ""}`, {
+				method: api.method,
+				headers: api.headers,
+				body: opts?.body,
+			})
+		} catch (error) {
+			return null
+		}
 	}
 
 	async send(item: Item, rs?: NodeJS.ReadableStream): Promise<void> {
 		const res = await this.fetch(APIS.senditemmeta, {
 			body: JSON.stringify(item),
 		})
+		if (!res) return
 		const resobj: VesselResponse<Sid> = await res.json()
 		if (resobj.code === ResponseCode.DNE) return
 		if (!resobj.data?.sid) throw Error("HTTPProxy.send: no Sid received") // TODO: error logic
@@ -89,19 +94,22 @@ export default class HTTPProxy extends Proxy {
 	private async fetchItem(item: Item): Promise<NodeJS.ReadableStream | null> {
 		if (item.type === IT.Dir) return null
 		const res = await this.fetch(APIS.getitem, { body: JSON.stringify(item) })
+		if (!res) return null
 		return res.body
 	}
 
-	async fetchIndex(): Promise<IndexArray> {
+	async fetchIndex(): Promise<IndexArray | null> {
 		const res = await this.fetch(APIS.getindex)
+		if (!res) return null
 		const resobj: VesselResponse<IndexArray> = await res.json()
 		if (!resobj?.data)
 			throw Error("HTTPProxy.fetchIndex: no IndexArray received") // TODO: error logic
 		return resobj.data
 	}
 
-	async getinvite(src: NID): Promise<Invite> {
+	async getinvite(src: NID): Promise<Invite | null> {
 		const res = await this.fetch(APIS.getinvite, { body: JSON.stringify(src) })
+		if (!res) return null
 		const resobj: VesselResponse<Invite> = await res.json()
 		if (!resobj.data) throw Error("HTTPProxy.getinvite: no Invite received") // TODO: error logic
 		return resobj.data
@@ -112,8 +120,9 @@ export default class HTTPProxy extends Proxy {
 		return ResponseCode.DNE // TODO: ¯\_(ツ)_/¯
 	}
 
-	async getPriv(src: NID): Promise<PermissionGrant> {
+	async getPriv(src: NID): Promise<PermissionGrant | null> {
 		const res = await this.fetch(APIS.getPriv, { body: JSON.stringify(src) })
+		if (!res) return null
 		const resobj: VesselResponse<PermissionGrant> = await res.json()
 		if (resobj.code === ResponseCode.ERR)
 			throw Error("HTTPProxy.getPriv: error code") // TODO: error logic

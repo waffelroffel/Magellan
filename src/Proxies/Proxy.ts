@@ -1,12 +1,11 @@
-import { Medium } from "../enums"
+import { Medium, ResponseCode } from "../enums"
 import {
 	Item,
 	NID,
-	PIndexArray,
-	PInviteResponse,
-	PResponseCode,
-	PReadable,
-	PPermissionGrant,
+	ProxyRes,
+	PermissionGrant,
+	Invite,
+	IndexArray,
 } from "../interfaces"
 import Vessel from "../Vessel"
 
@@ -14,9 +13,9 @@ export default abstract class Proxy {
 	abstract type: Medium // TODO: unused
 
 	abstract send(item: Item, rs?: NodeJS.ReadableStream): void
-	abstract fetchItems(items: Item[]): PReadable[]
-	abstract fetchIndex(): PIndexArray
-	abstract getinvite(src: NID): PInviteResponse
-	abstract addPeer(src: Vessel | NID): PResponseCode
-	abstract getPriv(src: NID): PPermissionGrant
+	abstract fetchItems(items: Item[]): ProxyRes<NodeJS.ReadableStream>[]
+	abstract fetchIndex(): ProxyRes<IndexArray>
+	abstract getinvite(src: NID): ProxyRes<Invite>
+	abstract addPeer(src: Vessel | NID): ProxyRes<ResponseCode>
+	abstract getPriv(src: NID): ProxyRes<PermissionGrant>
 }

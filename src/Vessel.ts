@@ -16,10 +16,11 @@ import {
 	Permissions,
 	Settings,
 	StartupFlags,
-	PIndexArray,
 	LoggerConfig,
 	Invite,
 	VesselOptions,
+	IndexArray,
+	ProxyRes,
 } from "./interfaces"
 import ProxyInterface from "./ProxyInterface"
 import { cts, randint } from "./utils"
@@ -183,6 +184,7 @@ export default class Vessel {
 	}
 
 	exit(): void {
+		this.logger(true, "OFFLINE")
 		this.online = false
 		this.watcher.close()
 		this.server.close()
@@ -193,7 +195,8 @@ export default class Vessel {
 	private async joinvia(nid: NID): Promise<void> {
 		const proxy = this.proxylist.addNode(Medium.http, { nid })
 		const ir = await proxy.getinvite(this.nid)
-		if (!ir) throw Error("request denied") // TODO
+		if (!ir)
+			return this.logger(this.loggerconf.error, "ERROR: couldn't fetch invite")
 		this._sharetype = ir.sharetype
 		this.permissions = ir.perms
 		ir.peers.forEach(nid => {
@@ -360,8 +363,9 @@ export default class Vessel {
 	}
 
 	getRS(item: Item): NodeJS.ReadableStream | null {
-		this.logger(this.loggerconf.send, "SENDING", item.path)
-		return this.store.createRS(item)
+		const rs = this.store.createRS(item)
+		if (rs) this.logger(this.loggerconf.send, "SENDING", item.path)
+		return rs
 	}
 
 	/**
@@ -375,18 +379,25 @@ export default class Vessel {
 		proxy.addPeer(vessel)
 	}
 
-	private async updateCargo(index: PIndexArray, proxy: Proxy): Promise<void> {
+	private async updateCargo(
+		index: ProxyRes<IndexArray>,
+		proxy: Proxy
+	): Promise<void> {
 		this.logger(this.loggerconf.update, "UPDATING")
 
-		const items = (await index)
+		const items = await index
+		if (!items)
+			return this.logger(this.loggerconf.error, "ERROR: couldn't fetch index")
+
+		const news = items
 			.flatMap(kv => kv[1])
 			.map(i => this.index.apply(i)[0]) // FIXME: temp for lww
 			.filter(res => (res.same === undefined ? true : !res.same && res.io))
 			.map(res => res.after) // TODO: clean
 		this.index.save()
 
-		proxy.fetchItems(items).forEach(async (prs, i) => {
-			this.applyIO(items[i], (await prs) ?? undefined)
+		proxy.fetchItems(news).forEach(async (prs, i) => {
+			this.applyIO(news[i], (await prs) ?? undefined)
 		})
 	}
 
@@ -420,7 +431,7 @@ if (require.main === module) {
 			update: false,
 			//local: false,
 			send: false,
-			online: false,
+			//online: false,
 		},
 		filerp: DupFileConfig,
 		dirrp: DupDirConfig,

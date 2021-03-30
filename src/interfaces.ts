@@ -103,14 +103,7 @@ export interface ProxyOption {
 }
 
 // ---------------- PROXY ----------------
-export type PReadable =
-	| NodeJS.ReadableStream
-	| null
-	| Promise<NodeJS.ReadableStream | null>
-export type PIndexArray = IndexArray | Promise<IndexArray>
-export type PInviteResponse = Invite | Promise<Invite>
-export type PResponseCode = ResponseCode | Promise<ResponseCode>
-export type PPermissionGrant = PermissionGrant | Promise<PermissionGrant>
+export type ProxyRes<T> = T | null | Promise<T | null>
 
 // ---------------- RESOLVES ----------------
 export interface Resolution {
