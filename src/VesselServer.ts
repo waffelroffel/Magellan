@@ -56,15 +56,10 @@ export default class VesselServer {
 		this.server.post<{ Body: NID; Reply: VesselResponse<Invite> }>(
 			"/invite",
 			async req => {
-				// TODO: move inside Vessel
-				const ir: Invite = {
-					sharetype: this.vessel.sharetype,
-					peers: this.vessel.proxylist.serialize().map(p => p.nid),
-					privs: this.vessel.genDefaultPrivs(),
-				}
-				this.vessel.proxylist.addNode(Medium.http, { nid: req.body })
-				this.vessel.saveSettings() // TODO: move inside Vessel
-				return { msg: "Access granted", code: RC.DNE, data: ir }
+				const invite = this.vessel.invite(req.body)
+				return invite
+					? { msg: "Access granted", code: RC.DNE, data: invite }
+					: { msg: "Couldn't grant access", code: RC.ERR }
 			}
 		)
 
@@ -99,7 +94,7 @@ export default class VesselServer {
 			async req => {
 				const item = this.tempitems.get(req.params.sid)
 				if (!item) return { msg: "Item not in templist", code: RC.ERR }
-				this.vessel.applyIncoming(item, req.raw) // TODO: return boolean ?
+				this.vessel.applyIncoming(item, req.raw) // TODO: req.body, return boolean ?
 				return { msg: "Transfer successful", code: RC.DNE }
 			}
 		)

@@ -58,7 +58,7 @@ export default class HTTPProxy extends Proxy {
 	private protocol = "http://"
 	private base: string
 
-	constructor(nid: NID, admin?: boolean) {
+	constructor(nid: NID) {
 		super()
 		this.nid = nid
 		this.base = `${this.protocol}${nid.host}:${nid.port}`

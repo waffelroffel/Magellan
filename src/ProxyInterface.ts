@@ -19,11 +19,9 @@ export default class ProxyInterface extends Array<Proxy> {
 	private createProxy(type: Medium, data: ProxyOption): Proxy | null {
 		switch (type) {
 			case Medium.local:
-				return data.vessel ? new LocalProxy(data.vessel, data.admin) : null
+				return data.vessel ? new LocalProxy(data.vessel) : null
 			case Medium.http:
-				return data.nid ? new HTTPProxy(data.nid, data.admin) : null
-			default:
-				return null
+				return data.nid ? new HTTPProxy(data.nid) : null
 		}
 	}
 

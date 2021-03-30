@@ -23,7 +23,7 @@ export interface Settings {
 	nid: NID
 	peers: { nid: NID }[]
 	sharetype: SHARE_TYPE
-	privs: Privileges
+	privs: Permissions
 	ignores: string[]
 	loggerconf: LoggerConfig
 	admin: boolean
@@ -45,6 +45,10 @@ export interface LoggerConfig {
 	error?: boolean
 	online?: boolean
 	vanish?: boolean
+}
+
+export interface VesselOptions extends CargoListOptions {
+	loggerconf?: LoggerConfig
 }
 
 // ---------------- CARGOLIST ----------------
@@ -69,6 +73,11 @@ export interface Item {
 }
 
 export type IndexArray = [string, Item[]][]
+
+export interface CargoListOptions {
+	filerp?: FileRPConfig
+	dirrp?: DirRPConfig
+}
 
 // ---------------- LOG ----------------
 export interface LogId {
@@ -130,8 +139,8 @@ export interface DirRPConfig {
 	remrem: ResolveOption
 }
 
-// ---------------- PRIVILEGES ----------------
-export interface Privileges {
+// ---------------- PERMISSIONS ----------------
+export interface Permissions {
 	read: boolean
 	write: boolean
 }
@@ -139,7 +148,7 @@ export interface Privileges {
 // ---------------- SERVER ----------------
 export interface Invite {
 	sharetype: SHARE_TYPE
-	privs: { write: boolean; read: boolean }
+	perms: { write: boolean; read: boolean }
 	peers: NID[]
 }
 export interface Sid {

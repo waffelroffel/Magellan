@@ -1,5 +1,6 @@
 import { Medium, ResponseCode } from "../enums"
 import { Item, IndexArray, Invite, PermissionGrant } from "../interfaces"
+import PermissionManager from "../Permissions"
 import Vessel from "../Vessel"
 import Proxy from "./Proxy"
 
@@ -7,7 +8,7 @@ export default class LocalProxy extends Proxy {
 	type = Medium.local
 	private local: Vessel
 
-	constructor(vessel: Vessel, admin?: boolean) {
+	constructor(vessel: Vessel) {
 		super()
 		this.local = vessel
 	}
@@ -28,7 +29,7 @@ export default class LocalProxy extends Proxy {
 		return {
 			sharetype: this.local.sharetype,
 			peers: this.local.proxylist.serialize().map(p => p.nid),
-			privs: this.local.genDefaultPrivs(),
+			perms: PermissionManager.defaultPerms(this.local.sharetype),
 		}
 	}
 

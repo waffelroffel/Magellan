@@ -12,19 +12,6 @@ export const toShareType = (value: string): SHARE_TYPE => {
 	return type
 }
 
-export const enum PERMISSION {
-	WRITE = "W",
-	READ = "R",
-}
-
-const PERMISSIONS = [PERMISSION.WRITE, PERMISSION.READ]
-
-export const toPermission = (value: string): PERMISSION => {
-	const type = PERMISSIONS.find(st => st === value)
-	if (!type) throw Error("toPermission: invalid value")
-	return type
-}
-
 // ---------------- CARGOLIST ----------------
 export const enum ItemType {
 	Dir = "D",
@@ -95,8 +82,16 @@ export const enum ResolveOption {
 	DUP,
 }
 
-// ---------------- PRIVILEGES ----------------
-export const enum PRIVILEGE_TYPE {
-	READ,
-	WRITE,
+// ---------------- PERMISSIONS ----------------
+export const enum PERMISSION {
+	WRITE = "W",
+	READ = "R",
+}
+
+const PERMISSIONS = [PERMISSION.WRITE, PERMISSION.READ]
+
+export const toPermission = (value: string): PERMISSION => {
+	const type = PERMISSIONS.find(st => st === value)
+	if (!type) throw Error("toPermission: invalid value")
+	return type
 }

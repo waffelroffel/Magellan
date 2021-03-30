@@ -2,9 +2,10 @@ import { readdirSync } from "fs"
 import { join } from "path"
 import CargoList from "../src/CargoList"
 import { Item, Tomb } from "../src/interfaces"
-import { computehash } from "../src/utils"
+import { LocalStorage } from "../src/Storages/LocalDrive"
 import Vessel from "../src/Vessel"
 
+const local = new LocalStorage("")
 export function compFiles(root1: string, root2: string): boolean {
 	const [ds1, fs1] = getAllFiles(root1)
 	const [ds2, fs2] = getAllFiles(root2)
@@ -16,7 +17,7 @@ export function compFiles(root1: string, root2: string): boolean {
 }
 
 function compFile(r1: string, f1: string, r2: string, f2: string): boolean {
-	return computehash(join(r1, f1)) === computehash(join(r2, f2))
+	return local.computehash(join(r1, f1)) === local.computehash(join(r2, f2))
 }
 
 function getAllFiles(path: string): [string[], string[]] {

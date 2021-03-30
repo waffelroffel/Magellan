@@ -8,15 +8,14 @@ import {
 } from "./enums"
 import {
 	Item,
-	FileRPConfig,
 	IndexArray,
-	DirRPConfig,
 	ResolveLogic as RL,
+	CargoListOptions,
 } from "./interfaces"
 import { LWWDirConfig, LWWFileConfig } from "./ResolvePolicies/defaultconfigs"
 import { makefpmap, makedpmap } from "./ResolvePolicies/ResolvePolicies"
 import { Resolution } from "./interfaces"
-import { uuid } from "./utils"
+import { ct, uuid } from "./utils"
 
 /**
  * Simple-LWW: all operations are ADD, REM, and CHG. Concurrent file movements will create duplicates across the system
@@ -34,17 +33,13 @@ export default class CargoList {
 	private rsdir: Map<string, RL>
 	private rsdirp: Map<string, RO>
 
-	constructor(
-		root: string,
-		fileconfig?: FileRPConfig,
-		dirconfig?: DirRPConfig
-	) {
+	constructor(root: string, opts?: CargoListOptions) {
 		this.index = new Map()
 		this.indexpath = join(root, this.tablefile)
-		const frs = makefpmap(fileconfig ?? LWWFileConfig)
+		const frs = makefpmap(opts?.filerp ?? LWWFileConfig)
 		this.rsfile = frs[0]
 		this.rsfilep = frs[1]
-		const drs = makedpmap(dirconfig ?? LWWDirConfig)
+		const drs = makedpmap(opts?.dirrp ?? LWWDirConfig)
 		this.rsdir = drs[0]
 		this.rsdirp = drs[1]
 	}
@@ -69,22 +64,15 @@ export default class CargoList {
 		console.log(this.index)
 	}
 
-	static newItem(
-		path: string,
-		uuid: string,
-		type: IT,
-		ts: number,
-		action: AT,
-		user: string
-	): Item {
+	static newItem(path: string, type: IT, action: AT, user: string): Item {
 		const item: Item = {
 			path,
-			uuid,
+			uuid: this.genId(),
 			type,
-			lastModified: ts,
+			lastModified: ct(),
 			lastAction: action,
 			lastActionBy: user,
-			actionId: this.genActionId(),
+			actionId: this.genId(),
 		}
 
 		if (action === AT.Remove) item.tomb = { type: TT.Deleted }
@@ -92,7 +80,7 @@ export default class CargoList {
 	}
 
 	// TODO:
-	static genActionId(): string {
+	static genId(): string {
 		return uuid()
 	}
 

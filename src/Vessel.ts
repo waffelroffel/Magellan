@@ -13,26 +13,23 @@ import {
 import {
 	Item,
 	NID,
-	Privileges,
+	Permissions,
 	Settings,
 	StartupFlags,
 	PIndexArray,
 	LoggerConfig,
+	Invite,
+	VesselOptions,
 } from "./interfaces"
 import ProxyInterface from "./ProxyInterface"
-import {
-	cts,
-	ct,
-	computehash,
-	randint,
-	applyFolderIO,
-	applyFileIO,
-	createRS,
-	uuid,
-} from "./utils"
+import { cts, randint } from "./utils"
 import Proxy from "./Proxies/Proxy"
 import VesselServer from "./VesselServer"
 import LocalProxy from "./Proxies/LocalProxy"
+import PermissionManager from "./Permissions"
+import ABCStorage from "./Storages/ABCStorage"
+import { LocalStorage } from "./Storages/LocalDrive"
+import { DupDirConfig, DupFileConfig } from "./ResolvePolicies/defaultconfigs"
 
 const TABLE_END = "indextable.json"
 const SETTINGS_END = "settings.json"
@@ -69,13 +66,15 @@ export default class Vessel {
 	skiplist = new Set<string>()
 	startupFlags: StartupFlags = { init: true, skip: false, check: false }
 	proxylist = new ProxyInterface()
-	privs: Privileges = { read: false, write: false }
 	ignores: Set<string>
 	nid: NID
 	loggerconf: LoggerConfig
 	online = false
+	store: ABCStorage
 
 	private admin = false
+	private permissions: Permissions = { write: false, read: false }
+	private permmanager?: PermissionManager
 
 	private _watcher?: FSWatcher
 	private _server?: VesselServer // TODO: move inside contructor?
@@ -84,7 +83,7 @@ export default class Vessel {
 
 	private afterOnline?: () => {}
 
-	constructor(user: string, root: string, loggerconf?: LoggerConfig) {
+	constructor(user: string, root: string, opts?: VesselOptions) {
 		this.user = user
 		this.root = root
 		this.rooti = root.length
@@ -95,9 +94,19 @@ export default class Vessel {
 			.add(this.root)
 			.add(this.tablePath)
 			.add(this.settingsPath)
-		this.index = new CargoList(root)
+		this.index = new CargoList(root, opts)
 		this.nid = { host: "localhost", port: randint(8000, 8888) }
-		this.loggerconf = this.checkLoggerConfig(loggerconf)
+		this.loggerconf = this.checkLoggerConfig(opts?.loggerconf)
+		this.store = this.assignStorage(root, "local")
+	}
+
+	private assignStorage(root: string, type: string): ABCStorage {
+		switch (type) {
+			case "local":
+				return new LocalStorage(root)
+			default:
+				throw Error()
+		}
 	}
 
 	private checkLoggerConfig(conf?: LoggerConfig): LoggerConfig {
@@ -155,7 +164,9 @@ export default class Vessel {
 	new(sharetype: ST): Vessel {
 		this._server = new VesselServer(this, this.nid.host, this.nid.port)
 		this._sharetype = sharetype
-		this.privs = { write: true, read: true } // TODO: use genDefaultPrivs
+		this.permissions = PermissionManager.defaultPerms(sharetype)
+		this.permmanager = new PermissionManager()
+		this.permmanager.grantAll(this.permissions, this.nid)
 		this.admin = true
 		this._setupready = this.setupEvents()
 		this.saveSettings()
@@ -163,9 +174,7 @@ export default class Vessel {
 	}
 
 	connect(): Vessel {
-		this.startServer().then(() => {
-			this.afterOnline?.()
-		})
+		this.startServer().then(() => this.afterOnline?.())
 		return this
 	}
 
@@ -186,12 +195,11 @@ export default class Vessel {
 		const ir = await proxy.getinvite(this.nid)
 		if (!ir) throw Error("request denied") // TODO
 		this._sharetype = ir.sharetype
-		this.privs = ir.privs
-		ir.peers
-			.filter(nid => !this.proxylist.has(nid))
-			.forEach(nid =>
-				this.proxylist.addNode(Medium.http, { nid }).addPeer(this.nid)
-			)
+		this.permissions = ir.perms
+		ir.peers.forEach(nid => {
+			if (this.proxylist.has(nid)) return
+			this.proxylist.addNode(Medium.http, { nid }).addPeer(this.nid)
+		})
 		this.updateCargo(proxy.fetchIndex(), proxy)
 		this.saveSettings()
 	}
@@ -212,13 +220,14 @@ export default class Vessel {
 			this.proxylist.addNode(Medium.http, { nid: peer.nid })
 		)
 		this._sharetype = settings.sharetype
-		this.privs = settings.privs
+		this.permissions = settings.privs
 		this.ignores = new Set<string>(settings.ignores)
 		this.loggerconf = settings.loggerconf
 		this.admin = settings.admin
 		return this
 	}
 
+	// TODO: async
 	saveSettings(): Vessel {
 		const settings: Settings = {
 			user: this.user,
@@ -232,7 +241,7 @@ export default class Vessel {
 			nid: this.nid,
 			peers: this.proxylist.serialize(),
 			sharetype: this.sharetype,
-			privs: this.privs,
+			privs: this.permissions,
 			ignores: [...this.ignores],
 			loggerconf: this.loggerconf,
 			admin: this.admin,
@@ -246,7 +255,7 @@ export default class Vessel {
 		return value
 	}
 
-	private removeRoot(path: string): string {
+	private remRoot(path: string): string {
 		return path.substring(this.rooti)
 	}
 
@@ -294,75 +303,65 @@ export default class Vessel {
 	private exists(path: string, type: IT): boolean {
 		switch (type) {
 			case IT.File:
-				return this.index.getLatest(path)?.hash === computehash(path)
+				return this.index.getLatest(path)?.hash === this.store.computehash(path)
 			case IT.Dir:
-				return this.index.getLatest(path) !== null
-			default:
-				throw Error()
+				return this.index.getLatest(path)?.lastAction !== AT.Remove
 		}
 	}
 
 	private applyLocal(path: string, type: IT, action: AT): void {
-		if (!this.privs.write) return
+		if (!this.permissions.write) return
 		if (this.ignores.has(path)) return
 		if (this.startupFlags.check && this.exists(path, type)) return
 		if (this.skiplist.delete(path) || this.startupFlags.skip) return
 
-		const item = CargoList.newItem(
-			this.removeRoot(path),
-			uuid(),
-			type,
-			ct(),
-			action,
-			this.user
-		)
+		const item = CargoList.newItem(this.remRoot(path), type, action, this.user)
 
 		if (action === AT.Change)
 			item.uuid = this.index.getLatest(item.path)?.uuid ?? item.uuid
 		if (type === IT.File && (action === AT.Add || action === AT.Change))
-			item.hash = computehash(path)
+			item.hash = this.store.computehash(path)
 
 		//this.log.push(item, this.user)
 		this.index.apply(item) // TODO: const ress = this.index.apply(item), when implementing other resolve policies
-		this.logger(
-			(this.loggerconf.init && this.startupFlags.init) ||
-				(this.loggerconf.local && !this.startupFlags.init),
-			"->",
-			action,
-			item.path
-		)
+		const inInit = this.loggerconf.init && this.startupFlags.init
+		const InLocal = this.loggerconf.local && !this.startupFlags.init
+		this.logger(inInit || InLocal, "->", action, item.path)
+
 		if (!this.startupFlags.init) this.index.save()
-		if (this.online)
-			this.proxylist.broadcast(item, this.getRS(item) ?? undefined) // TODO: clean optional chaining
+		if (this.online) this.broadcast(item)
+	}
+
+	private broadcast(item: Item): void {
+		this.proxylist.broadcast(item, this.getRS(item) ?? undefined)
 	}
 
 	applyIncoming(item: Item, rs?: NodeJS.ReadableStream): void {
-		if (!this.privs.read) return // TODO: ¯\_(ツ)_/¯
-		if (this.ignores.has(item.path))
-			throw Error(`Vessel.applyIncoming: got ${item.path}`)
+		if (!this.permissions.read) return // TODO: ¯\_(ツ)_/¯
+		if (this.ignores.has(item.path)) return
+
 		const ress = this.index.apply(item)
 		this.logger(this.loggerconf.remote, "<-", item.lastAction, item.path)
 		if (!ress[0].new && ress[0].ro === RO.LWW && !ress[0].io) return
 
-		this.applyIO(item, join(this.root, item.path), rs)
-
+		this.applyIO(item, rs)
 		this.index.save()
 
 		//TODO: forward to known peers
 	}
 
-	private applyIO(item: Item, fullpath: string, rs?: NodeJS.ReadableStream) {
+	private applyIO(item: Item, rs?: NodeJS.ReadableStream) {
+		const fullpath = join(this.root, item.path)
 		this.skiplist.add(fullpath)
-		if (item.type === IT.Dir && !applyFolderIO(item, fullpath))
+		if (item.type === IT.Dir && !this.store.applyFolderIO(item))
 			this.skiplist.delete(fullpath)
-		else if (item.type === IT.File && !applyFileIO(item, fullpath, rs))
+		else if (item.type === IT.File && !this.store.applyFileIO(item, rs))
 			this.skiplist.delete(fullpath)
 	}
 
 	getRS(item: Item): NodeJS.ReadableStream | null {
-		const rs = createRS(item, this.root)
-		if (rs) this.logger(this.loggerconf.send, "SENDING", item.path)
-		return rs
+		this.logger(this.loggerconf.send, "SENDING", item.path)
+		return this.store.createRS(item)
 	}
 
 	/**
@@ -373,7 +372,7 @@ export default class Vessel {
 		if (!(proxy instanceof LocalProxy))
 			throw Error("Vessel.addVessel: not localproxy")
 		this.updateCargo(proxy.fetchIndex(), proxy)
-		proxy.addPeer(vessel) // TODO:
+		proxy.addPeer(vessel)
 	}
 
 	private async updateCargo(index: PIndexArray, proxy: Proxy): Promise<void> {
@@ -387,34 +386,50 @@ export default class Vessel {
 		this.index.save()
 
 		proxy.fetchItems(items).forEach(async (prs, i) => {
-			const fullpath = join(this.root, items[i].path)
-			this.applyIO(items[i], fullpath, (await prs) || undefined) // TODO: clean optional chaining
+			this.applyIO(items[i], (await prs) ?? undefined)
 		})
-	}
-
-	genDefaultPrivs(): { write: boolean; read: boolean } {
-		return { write: this.sharetype === ST.All2All, read: true }
 	}
 
 	// TODO
 	grantPrivs(nid: NID, priv: PERMISSION): boolean {
 		return false
 	}
+
+	invite(nid: NID): Invite | null {
+		if (!this.isAdmin || !this.permmanager) return null
+		const perms = PermissionManager.defaultPerms(this.sharetype)
+		if (perms.read) this.permmanager.grant(PERMISSION.READ, nid)
+		if (perms.write) this.permmanager.grant(PERMISSION.WRITE, nid)
+		const invite = {
+			sharetype: this.sharetype,
+			peers: this.proxylist.serialize().map(p => p.nid),
+			perms: perms,
+		}
+		this.permmanager.grant
+		this.proxylist.addNode(Medium.http, { nid })
+		this.saveSettings()
+		return invite
+	}
 }
 
 if (require.main === module) {
-	const lconf = {
-		init: false,
-		//ready: false,
-		update: false,
-		//local: false,
-		send: false,
-		online: false,
+	const opts = {
+		loggerconf: {
+			init: false,
+			//ready: false,
+			update: false,
+			//local: false,
+			send: false,
+			online: false,
+		},
+		filerp: DupFileConfig,
+		dirrp: DupDirConfig,
 	}
-	const evan = new Vessel("evan", join("testroot", "evan"), lconf)
+
+	const evan = new Vessel("evan", join("testroot", "evan"), opts)
 		.new(ST.All2All)
 		.connect()
-	const dave = new Vessel("dave", join("testroot", "dave"), lconf)
+	const dave = new Vessel("dave", join("testroot", "dave"), opts)
 		.join(evan.nid)
 		.connect()
 }
