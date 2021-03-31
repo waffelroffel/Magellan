@@ -56,7 +56,6 @@ export interface Tomb {
 	type: TombType
 	movedTo?: string
 }
-
 export interface Item {
 	path: string
 	uuid: string
@@ -70,7 +69,10 @@ export interface Item {
 	tomb?: Tomb
 	creator?: string //TODO
 	reachable?: boolean //TODO
+	clock: VectorClock
 }
+
+export type VectorClock = [string, number][]
 
 export type IndexArray = [string, Item[]][]
 
@@ -109,10 +111,9 @@ export type ProxyRes<T> = T | null | Promise<T | null>
 export interface Resolution {
 	before?: Item
 	after: Item
-	io: boolean
 	ro: ResolveOption
+	new: boolean
 	same?: boolean
-	new?: boolean
 }
 
 export type ResolveLogic = (item1: Item, item2: Item) => Resolution[]

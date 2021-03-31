@@ -1,35 +1,50 @@
 import { extname } from "path"
 import { ResolveOption as RO } from "../enums"
 import { Item, Resolution, ResolveLogic } from "../interfaces"
-import { deepcopy } from "../utils"
+import { comp, deepcopy, identical } from "../utils"
 
-function comp(i1: Item, i2: Item): boolean {
+function compLamport(i1: Item, i2: Item): boolean {
 	return i1.lastModified !== i2.lastModified
 		? i1.lastModified < i2.lastModified
 		: i1.lastActionBy < i2.lastActionBy
 }
 
 function lww(i1: Item, i2: Item): Resolution[] {
-	const same =
-		i1.lastModified === i2.lastModified && i1.actionId === i2.actionId
-	if (comp(i1, i2)) return [{ after: i2, io: true, ro: RO.LWW, same }]
-	return [{ after: i1, io: false, ro: RO.LWW, same }]
+	if (identical(i1.clock, i2.clock))
+		return [{ after: i2, ro: RO.LWW, new: false }]
+	switch (comp(i1.clock, i2.clock)) {
+		case 1:
+			return [{ after: i2, ro: RO.LWW, new: true }]
+		case -1:
+			return [{ after: i1, ro: RO.LWW, new: false }]
+		case 0:
+			const cond = compLamport(i1, i2)
+			const lastest = cond ? i2 : i1
+			return [{ after: lastest, ro: RO.LWW, new: cond }]
+		// return dup(i1, i2)
+		default:
+			throw Error()
+	}
 }
 
+// TODO: need to copy file to temporary location after each action
+// or refetch from network
 function dup(i1: Item, i2: Item): Resolution[] {
-	const cond = comp(i1, i2)
+	if (i1.lastActionBy === i2.lastActionBy) throw Error("TEMP: dup")
+
+	const cond = i1.lastActionBy < i2.lastActionBy
 	const changed = newname(deepcopy(cond ? i2 : i1))
 	const res1 = {
 		before: i1,
 		after: !cond ? changed : i1,
-		io: !cond,
 		ro: RO.DUP,
+		new: true,
 	}
 	const res2 = {
 		before: i2,
 		after: cond ? changed : i2,
-		io: cond,
 		ro: RO.DUP,
+		new: true,
 	}
 	return [res1, res2]
 }
@@ -44,21 +59,21 @@ function newname(i: Item): Item {
 
 const addaddlww: ResolveLogic = lww
 
-const addadddup: ResolveLogic = dup
+const addadddup: ResolveLogic = lww
 
-const addremlww: ResolveLogic = addaddlww
+const addremlww: ResolveLogic = lww
 
-const addremdup: ResolveLogic = addadddup
+const addremdup: ResolveLogic = lww
 
-const addchglww: ResolveLogic = addaddlww
+const addchglww: ResolveLogic = lww
 
-const addchgdup: ResolveLogic = addadddup
+const addchgdup: ResolveLogic = lww
 
-const remchglww: ResolveLogic = addaddlww
+const remchglww: ResolveLogic = lww
 
-const chgchglww: ResolveLogic = addaddlww
+const chgchglww: ResolveLogic = lww
 
-const chgchgdup: ResolveLogic = addadddup
+const chgchgdup: ResolveLogic = lww
 
 const rp = new Map<string, ResolveLogic[]>()
 	.set("addadd", [addaddlww, addadddup])

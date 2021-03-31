@@ -23,7 +23,7 @@ import {
 	ProxyRes,
 } from "./interfaces"
 import ProxyInterface from "./ProxyInterface"
-import { cts, randint } from "./utils"
+import { cts, increment, randint } from "./utils"
 import Proxy from "./Proxies/Proxy"
 import VesselServer from "./VesselServer"
 import LocalProxy from "./Proxies/LocalProxy"
@@ -76,13 +76,32 @@ export default class Vessel {
 	private admin = false
 	private permissions: Permissions = { write: false, read: false }
 	private permmanager?: PermissionManager
+	private afterOnline?: () => {}
 
 	private _watcher?: FSWatcher
 	private _server?: VesselServer // TODO: move inside contructor?
 	private _sharetype?: ST
 	private _setupready?: Promise<void>
 
-	private afterOnline?: () => {}
+	get isAdmin(): boolean {
+		return this.admin
+	}
+
+	get sharetype(): ST {
+		return this.resolve(this._sharetype)
+	}
+
+	private get watcher(): FSWatcher {
+		return this.resolve(this._watcher)
+	}
+
+	private get server(): VesselServer {
+		return this.resolve(this._server)
+	}
+
+	private get setupready(): Promise<void> {
+		return this.resolve(this._setupready)
+	}
 
 	constructor(user: string, root: string, opts?: VesselOptions) {
 		this.user = user
@@ -98,10 +117,10 @@ export default class Vessel {
 		this.index = new CargoList(root, opts)
 		this.nid = { host: "localhost", port: randint(8000, 8888) }
 		this.loggerconf = this.checkLoggerConfig(opts?.loggerconf)
-		this.store = this.assignStorage(root, "local")
+		this.store = this.initStorage(root, "local")
 	}
 
-	private assignStorage(root: string, type: string): ABCStorage {
+	private initStorage(root: string, type: string): ABCStorage {
 		switch (type) {
 			case "local":
 				return new LocalStorage(root)
@@ -122,26 +141,6 @@ export default class Vessel {
 			online: conf?.online ?? DEFAULT_LOGGER.online,
 			vanish: conf?.vanish ?? DEFAULT_LOGGER.vanish,
 		}
-	}
-
-	get isAdmin(): boolean {
-		return this.admin
-	}
-
-	get sharetype(): ST {
-		return this.resolve(this._sharetype)
-	}
-
-	private get watcher(): FSWatcher {
-		return this.resolve(this._watcher)
-	}
-
-	private get server(): VesselServer {
-		return this.resolve(this._server)
-	}
-
-	private get setupready(): Promise<void> {
-		return this.resolve(this._setupready)
 	}
 
 	rejoin(addnew = false): Vessel {
@@ -183,7 +182,7 @@ export default class Vessel {
 		this.logger(this.loggerconf.vanish, "POFF! GONE.")
 	}
 
-	exit(): void {
+	disconnect(): void {
 		this.logger(true, "OFFLINE")
 		this.online = false
 		this.watcher.close()
@@ -318,18 +317,22 @@ export default class Vessel {
 		if (this.startupFlags.check && this.exists(path, type)) return
 		if (this.skiplist.delete(path) || this.startupFlags.skip) return
 
-		const item = CargoList.newItem(this.remRoot(path), type, action, this.user)
+		const item = CargoList.Item(this.remRoot(path), type, action, this.user)
 
-		if (action === AT.Change)
-			item.uuid = this.index.getLatest(item.path)?.uuid ?? item.uuid
+		if (action === AT.Change || action === AT.Remove) {
+			const latest = this.index.getLatest(item.path)
+			if (!latest) throw Error("latest === null")
+			item.uuid = latest.uuid
+			item.clock = increment(latest.clock, this.user)
+		}
 		if (type === IT.File && (action === AT.Add || action === AT.Change))
 			item.hash = this.store.computehash(path)
 
 		//this.log.push(item, this.user)
 		this.index.apply(item) // TODO: const ress = this.index.apply(item), when implementing other resolve policies
 		const inInit = this.loggerconf.init && this.startupFlags.init
-		const InLocal = this.loggerconf.local && !this.startupFlags.init
-		this.logger(inInit || InLocal, "->", action, item.path)
+		const inLocal = this.loggerconf.local && !this.startupFlags.init
+		this.logger(inInit || inLocal, "->", action, item.path)
 
 		if (!this.startupFlags.init) this.index.save()
 		if (this.online) this.broadcast(item)
@@ -345,7 +348,7 @@ export default class Vessel {
 
 		const ress = this.index.apply(item)
 		this.logger(this.loggerconf.remote, "<-", item.lastAction, item.path)
-		if (!ress[0].new && ress[0].ro === RO.LWW && !ress[0].io) return
+		if (!ress[0].new) return //&& ress[0].ro === RO.LWW) return
 
 		this.applyIO(item, rs)
 		this.index.save()
@@ -389,15 +392,15 @@ export default class Vessel {
 		if (!items)
 			return this.logger(this.loggerconf.error, "ERROR: couldn't fetch index")
 
-		const news = items
+		const newitems = items
 			.flatMap(kv => kv[1])
-			.map(i => this.index.apply(i)[0]) // FIXME: temp for lww
-			.filter(res => (res.same === undefined ? true : !res.same && res.io))
-			.map(res => res.after) // TODO: clean
+			.map(i => this.index.apply(i)[0])
+			.filter(res => res.new)
+			.map(res => res.after)
 		this.index.save()
 
-		proxy.fetchItems(news).forEach(async (prs, i) => {
-			this.applyIO(news[i], (await prs) ?? undefined)
+		proxy.fetchItems(newitems).forEach(async (prs, i) => {
+			this.applyIO(newitems[i], (await prs) ?? undefined)
 		})
 	}
 

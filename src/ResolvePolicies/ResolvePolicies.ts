@@ -2,10 +2,10 @@ import { ResolveOption } from "../enums"
 import { ResolveLogic, FileRPConfig, DirRPConfig } from "../interfaces"
 import rp from "./resolves"
 
-function assign(key: string, i: number): ResolveLogic {
+function assign(key: string, v: string): ResolveLogic {
 	const ps = rp.get(key)
 	if (!ps) throw Error("FileResolvePolicies.assign: undefined from get")
-	return ps[i]
+	return ps[v === ResolveOption.LWW ? 0 : 1]
 }
 
 export function makefpmap(

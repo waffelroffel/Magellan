@@ -58,13 +58,13 @@ export default class VesselServer {
 						this.vessel.connect()
 						return { msg: "vessel online", code: RC.DNE }
 					case "exit":
-						this.vessel.exit()
+						this.vessel.disconnect()
 						return { msg: "vessel offline", code: RC.DNE }
 					case "vanish":
 						this.vessel.vanish()
 						return { msg: "vessel vanished", code: RC.DNE }
 					default:
-						return { msg: "unknown cmd", code: RC.DNE }
+						return { msg: "unknown cmd", code: RC.ERR }
 				}
 			}
 		)

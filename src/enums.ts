@@ -1,7 +1,7 @@
 // ---------------- Vessel ----------------
 export const enum SHARE_TYPE {
 	All2All = "A2A", // everyone can do whatever they want
-	One2Aall = "121", // one/few admin(s)
+	One2Aall = "12A", // one to many
 }
 
 const SHARE_TYPES = [SHARE_TYPE.All2All, SHARE_TYPE.One2Aall]
@@ -78,8 +78,8 @@ export const enum ResponseCode {
 
 // ---------------- RESOLVES ----------------
 export const enum ResolveOption {
-	LWW,
-	DUP,
+	LWW = "LWW",
+	DUP = "DUP",
 }
 
 // ---------------- PERMISSIONS ----------------

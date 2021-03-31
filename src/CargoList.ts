@@ -15,7 +15,7 @@ import {
 import { LWWDirConfig, LWWFileConfig } from "./ResolvePolicies/defaultconfigs"
 import { makefpmap, makedpmap } from "./ResolvePolicies/ResolvePolicies"
 import { Resolution } from "./interfaces"
-import { ct, uuid } from "./utils"
+import { ct, increment, uuid } from "./utils"
 
 /**
  * Simple-LWW: all operations are ADD, REM, and CHG. Concurrent file movements will create duplicates across the system
@@ -64,7 +64,7 @@ export default class CargoList {
 		console.log(this.index)
 	}
 
-	static newItem(path: string, type: IT, action: AT, user: string): Item {
+	static Item(path: string, type: IT, action: AT, user: string): Item {
 		const item: Item = {
 			path,
 			uuid: this.genId(),
@@ -73,8 +73,9 @@ export default class CargoList {
 			lastAction: action,
 			lastActionBy: user,
 			actionId: this.genId(),
+			clock: [],
 		}
-
+		increment(item.clock, user)
 		if (action === AT.Remove) item.tomb = { type: TT.Deleted }
 		return item
 	}
@@ -95,6 +96,7 @@ export default class CargoList {
 			if (item.lastAction === AT.Remove && item.hash) return false
 			if (item.lastAction !== AT.Remove && !item.hash) return false
 		}
+		if (item.clock.length === 0) return false
 		// TODO: add checks for tomb.type and tomb.movedTo for different ActionType
 		// TODO: add checks all enum values (isEnum(...))
 		return true
@@ -133,10 +135,12 @@ export default class CargoList {
 		)
 	}
 
+	// TODO: unused
 	findById(item: Item): Item | null {
 		return this.index.get(item.path)?.find(i => i.uuid === item.uuid) ?? null
 	}
 
+	// TODO: unused
 	findbyhash(path: string, hash: string): Item | null {
 		return this.index.get(path)?.find(n => n.hash === hash) ?? null
 	}
@@ -173,7 +177,7 @@ export default class CargoList {
 	private getResPol(type: IT, pol: string): [RL, RO] {
 		const rl = (type === IT.File ? this.rsfile : this.rsdir).get(pol)
 		const ro = (type === IT.File ? this.rsfilep : this.rsdirp).get(pol)
-		if (!rl || ro === undefined) throw Error()
+		if (!rl || !ro) throw Error()
 		return [rl, ro]
 	}
 
@@ -193,7 +197,6 @@ export default class CargoList {
 
 	private applyADDFile(newitem: Item): Resolution[] {
 		const olditem = this.getLatest(newitem.path) || newitem
-
 		switch (olditem.lastAction) {
 			case AT.Add:
 				return this.resolve(olditem, newitem, "addadd")
@@ -208,7 +211,6 @@ export default class CargoList {
 
 	private applyREMOVEFile(newitem: Item): Resolution[] {
 		const olditem = this.getLatest(newitem.path) || newitem
-
 		switch (olditem.lastAction) {
 			case AT.Add:
 				return this.resolve(olditem, newitem, "addrem")
@@ -223,7 +225,6 @@ export default class CargoList {
 
 	private applyCHANGEFile(newitem: Item): Resolution[] {
 		const olditem = this.getLatest(newitem.path) || newitem
-
 		switch (olditem.lastAction) {
 			case AT.Add:
 				return this.resolve(olditem, newitem, "addchg")
@@ -238,7 +239,6 @@ export default class CargoList {
 
 	private applyADDFolder(newitem: Item): Resolution[] {
 		const olditem = this.getLatest(newitem.path) || newitem
-
 		switch (olditem.lastAction) {
 			case AT.Add:
 				return this.resolve(olditem, newitem, "addadd")
@@ -253,7 +253,6 @@ export default class CargoList {
 
 	private applyREMOVEFolder(newitem: Item): Resolution[] {
 		const olditem = this.getLatest(newitem.path) || newitem
-
 		switch (olditem.lastAction) {
 			case AT.Add:
 				return this.resolve(olditem, newitem, "addrem")
