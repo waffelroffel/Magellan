@@ -7,6 +7,7 @@ import {
 	rmSync,
 	createWriteStream,
 	createReadStream,
+	renameSync,
 } from "fs"
 import { join } from "path"
 import { ActionType, ItemType } from "../enums"
@@ -68,5 +69,9 @@ export class LocalStorage extends ABCStorage {
 		if (item.type === ItemType.Dir || item.lastAction === ActionType.Remove)
 			return null
 		return createReadStream(join(this.root, item.path))
+	}
+
+	move(from: Item, to: Item): void {
+		renameSync(from.path, to.path)
 	}
 }

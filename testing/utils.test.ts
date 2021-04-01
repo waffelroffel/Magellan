@@ -79,7 +79,7 @@ function equalItem(i1: Item, i2: Item): boolean {
 	if (i1.lastModified !== i2.lastModified) return false
 	if (i1.path !== i2.path) return false
 	if (i1.type !== i2.type) return false
-	if (i1.uuid !== i2.uuid) return false
+	if (i1.id !== i2.id) return false
 	if (!i1.tomb && i2.tomb) return false
 	if (i1.tomb && !i2.tomb) return false
 	if (i1.tomb && i2.tomb) return equalTomb(i1.tomb, i2.tomb)

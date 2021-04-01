@@ -67,22 +67,18 @@ export default class CargoList {
 	static Item(path: string, type: IT, action: AT, user: string): Item {
 		const item: Item = {
 			path,
-			uuid: this.genId(),
+			id: uuid(),
 			type,
 			lastModified: ct(),
 			lastAction: action,
 			lastActionBy: user,
-			actionId: this.genId(),
+			actionId: uuid(),
+			onDevice: false,
 			clock: [],
 		}
 		increment(item.clock, user)
 		if (action === AT.Remove) item.tomb = { type: TT.Deleted }
 		return item
-	}
-
-	// TODO:
-	static genId(): string {
-		return uuid()
 	}
 
 	/**
@@ -135,9 +131,8 @@ export default class CargoList {
 		)
 	}
 
-	// TODO: unused
 	findById(item: Item): Item | null {
-		return this.index.get(item.path)?.find(i => i.uuid === item.uuid) ?? null
+		return this.index.get(item.path)?.find(i => i.id === item.id) ?? null
 	}
 
 	// TODO: unused
@@ -151,24 +146,20 @@ export default class CargoList {
 		else itemlist.push(item)
 	}
 
-	private update(res: Resolution, ro?: RO): void {
-		switch (ro) {
+	private update(res: Resolution): void {
+		switch (res.ro) {
 			case RO.LWW:
-				this.index.set(res.after.path, [res.after])
+				if (!res.new) return
+				this.index.set(res.after.path, [res.after]) // TODO
 				return
 			case RO.DUP:
-				if (!res.before) return this.push(res.after)
-				const arr = this.index.get(res.after.path)
-				if (!arr) {
-					this.push(res.after)
-					res.before.lastAction = AT.Remove // TODO: change to rename later
-					res.before.tomb = { type: TT.Renamed, movedTo: res.after.path }
-					return
-				}
-				const index = arr.findIndex(i => i.uuid === res.after.uuid)
-				if (index === -1) arr.push(res.after)
-				else arr[index] = res.after
-				res.before.lastAction = AT.Remove // TODO: change to rename later
+				if (!res.before) throw Error()
+				if (!this.findById(res.before)) this.push(res.before)
+				if (!res.new) return
+				if (this.index.has(res.after.path)) throw Error()
+				this.push(res.after)
+				res.before.lastAction = AT.Rename // TODO: apply new item instead of modifying old
+				res.after.lastAction = AT.Rename // TODO: apply new item instead of modifying old
 				res.before.tomb = { type: TT.Renamed, movedTo: res.after.path }
 				return
 		}
@@ -183,15 +174,9 @@ export default class CargoList {
 
 	// TODO: conflicts at dst (res.after.path) need to be considered
 	private resolve(oldi: Item, newi: Item, pol: string): Resolution[] {
-		const [rl, ro] = this.getResPol(oldi.type, pol)
-		if (oldi === newi) {
-			const res = { after: newi, io: false, ro, new: true }
-			this.update(res, ro)
-			return [res]
-		}
-		if (ro === RO.DUP) this.push(newi)
+		const [rl, _] = this.getResPol(oldi.type, pol)
 		const resarr = rl(oldi, newi)
-		resarr.forEach(r => this.update(r, ro))
+		resarr.forEach(r => this.update(r))
 		return resarr
 	}
 

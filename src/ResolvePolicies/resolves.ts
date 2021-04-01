@@ -11,17 +11,17 @@ function compLamport(i1: Item, i2: Item): boolean {
 
 function lww(i1: Item, i2: Item): Resolution[] {
 	if (identical(i1.clock, i2.clock))
-		return [{ after: i2, ro: RO.LWW, new: false }]
+		return [{ after: i2, ro: RO.LWW, new: true }]
 	switch (comp(i1.clock, i2.clock)) {
 		case 1:
 			return [{ after: i2, ro: RO.LWW, new: true }]
 		case -1:
 			return [{ after: i1, ro: RO.LWW, new: false }]
 		case 0:
-			const cond = compLamport(i1, i2)
-			const lastest = cond ? i2 : i1
-			return [{ after: lastest, ro: RO.LWW, new: cond }]
-		// return dup(i1, i2)
+			//const cond = compLamport(i1, i2)
+			//const lastest = cond ? i2 : i1
+			//return [{ after: lastest, ro: RO.LWW, new: cond }]
+			return dup(i1, i2)
 		default:
 			throw Error()
 	}
@@ -32,21 +32,30 @@ function lww(i1: Item, i2: Item): Resolution[] {
 function dup(i1: Item, i2: Item): Resolution[] {
 	if (i1.lastActionBy === i2.lastActionBy) throw Error("TEMP: dup")
 
-	const cond = i1.lastActionBy < i2.lastActionBy
-	const changed = newname(deepcopy(cond ? i2 : i1))
-	const res1 = {
+	const cond = compLamport(i1, i2)
+	if (cond) {
+		// cond===true: new Item renamed
+		const res = {
+			before: i2,
+			after: newname(deepcopy(i2)),
+			ro: RO.DUP,
+			new: true,
+		}
+		return [res]
+	}
+	// cond===false: old Item renamed
+	const oldi = {
 		before: i1,
-		after: !cond ? changed : i1,
+		after: newname(deepcopy(i1)),
+		ro: RO.DUP,
+		fetch: true,
+	}
+	const newi = {
+		after: i2,
 		ro: RO.DUP,
 		new: true,
 	}
-	const res2 = {
-		before: i2,
-		after: cond ? changed : i2,
-		ro: RO.DUP,
-		new: true,
-	}
-	return [res1, res2]
+	return [oldi, newi]
 }
 
 function newname(i: Item): Item {

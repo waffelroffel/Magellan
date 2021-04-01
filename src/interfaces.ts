@@ -29,12 +29,6 @@ export interface Settings {
 	admin: boolean
 }
 
-export interface StartupFlags {
-	init: boolean
-	skip: boolean
-	check: boolean
-}
-
 export interface LoggerConfig {
 	init?: boolean
 	ready?: boolean
@@ -58,14 +52,14 @@ export interface Tomb {
 }
 export interface Item {
 	path: string
-	uuid: string
+	id: string
 	type: ItemType
 	lastModified: number
 	lastAction: ActionType // TODO: referrence to LOG/ LogItem id
 	lastActionBy: string
 	actionId: string
 	hash?: string // Files only
-	onDevice?: boolean
+	onDevice: boolean
 	tomb?: Tomb
 	creator?: string //TODO
 	reachable?: boolean //TODO
@@ -112,8 +106,8 @@ export interface Resolution {
 	before?: Item
 	after: Item
 	ro: ResolveOption
-	new: boolean
-	same?: boolean
+	new?: boolean
+	fetch?: boolean
 }
 
 export type ResolveLogic = (item1: Item, item2: Item) => Resolution[]
