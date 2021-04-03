@@ -59,9 +59,9 @@ export interface Item {
 	lastActionBy: string
 	actionId: string
 	hash?: string // Files only
-	onDevice: boolean
+	//onDevice: boolean
 	tomb?: Tomb
-	creator?: string //TODO
+	parent?: { path: string; id: string } //TODO
 	reachable?: boolean //TODO
 	clock: VectorClock
 }
@@ -107,7 +107,8 @@ export interface Resolution {
 	after: Item
 	ro: ResolveOption
 	new?: boolean
-	fetch?: boolean
+	rename?: boolean
+	overwrite?: boolean
 }
 
 export type ResolveLogic = (item1: Item, item2: Item) => Resolution[]

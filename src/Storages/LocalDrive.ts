@@ -8,6 +8,8 @@ import {
 	createWriteStream,
 	createReadStream,
 	renameSync,
+	write,
+	writeFileSync,
 } from "fs"
 import { join } from "path"
 import { ActionType, ItemType } from "../enums"
@@ -26,6 +28,10 @@ export class LocalStorage extends ABCStorage {
 		this.root = root
 	}
 
+	fullpath(item: Item): string {
+		return join(this.root, item.path)
+	}
+
 	computehash(path: string): string {
 		const hash = createHash("sha256")
 		return hash.update(readFileSync(path)).digest("hex") // TODO: change to stream
@@ -37,7 +43,7 @@ export class LocalStorage extends ABCStorage {
 	}
 
 	applyFolderIO(item: Item): boolean {
-		const fullpath = join(this.root, item.path)
+		const fullpath = this.fullpath(item)
 		const exists = existsSync(fullpath)
 		if (item.lastAction === ActionType.Remove && exists) {
 			rmdirSync(fullpath, { recursive: true })
@@ -50,16 +56,19 @@ export class LocalStorage extends ABCStorage {
 	}
 
 	applyFileIO(item: Item, rs?: NodeJS.ReadableStream): boolean {
-		const fullpath = join(this.root, item.path)
+		const fullpath = this.fullpath(item)
 		const exists = existsSync(fullpath)
 		if (item.lastAction === ActionType.Remove && exists) {
 			rmSync(fullpath)
 			return true
 		} else if (
-			item.lastAction === ActionType.Add ||
-			item.lastAction === ActionType.Change
+			// TODO: split rename to renamedFrom and renamedTo
+			[ActionType.Add, ActionType.Change, ActionType.Rename].includes(
+				item.lastAction
+			) &&
+			rs
 		) {
-			rs?.pipe(createWriteStream(fullpath))
+			rs.pipe(createWriteStream(fullpath))
 			return true
 		}
 		return false
@@ -68,10 +77,12 @@ export class LocalStorage extends ABCStorage {
 	createRS(item: Item): NodeJS.ReadableStream | null {
 		if (item.type === ItemType.Dir || item.lastAction === ActionType.Remove)
 			return null
-		return createReadStream(join(this.root, item.path))
+		return createReadStream(this.fullpath(item))
 	}
 
 	move(from: Item, to: Item): void {
-		renameSync(from.path, to.path)
+		createReadStream(this.fullpath(from)).pipe(
+			createWriteStream(this.fullpath(to))
+		)
 	}
 }

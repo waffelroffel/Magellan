@@ -35,25 +35,28 @@ function dup(i1: Item, i2: Item): Resolution[] {
 	const cond = compLamport(i1, i2)
 	if (cond) {
 		// cond===true: new Item renamed
-		const res = {
+		const newi = {
 			before: i2,
 			after: newname(deepcopy(i2)),
 			ro: RO.DUP,
 			new: true,
+			rename: true,
 		}
-		return [res]
+		return [newi]
 	}
 	// cond===false: old Item renamed
 	const oldi = {
 		before: i1,
 		after: newname(deepcopy(i1)),
 		ro: RO.DUP,
-		fetch: true,
+		rename: true,
 	}
 	const newi = {
+		before: i2, // temp
 		after: i2,
 		ro: RO.DUP,
 		new: true,
+		overwrite: true,
 	}
 	return [oldi, newi]
 }
@@ -62,7 +65,7 @@ function newname(i: Item): Item {
 	const name = i.path.substring(0, i.path.lastIndexOf("."))
 	const user = i.lastActionBy
 	const ext = extname(i.path)
-	i.path = `${name} - (${user})${ext}`
+	i.path = `${name}-${user}${ext}`
 	return i
 }
 

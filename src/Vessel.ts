@@ -30,6 +30,7 @@ import PermissionManager from "./Permissions"
 import ABCStorage from "./Storages/ABCStorage"
 import { LocalStorage } from "./Storages/LocalDrive"
 import { DupDirConfig, DupFileConfig } from "./ResolvePolicies/defaultconfigs"
+import SkipList from "./SkipList"
 
 const TABLE_END = "indextable.json"
 const SETTINGS_END = "settings.json"
@@ -63,19 +64,20 @@ export default class Vessel {
 	settingsEnd = SETTINGS_END
 	settingsPath = SETTINGS_END
 	index: CargoList
-	skiplist = new Set<string>()
+	skiplist = new SkipList()
 	init: boolean = true
 	proxylist = new ProxyInterface()
 	ignores: Set<string>
 	nid: NID
 	loggerconf: LoggerConfig
 	online = false
+	synced = false
 	store: ABCStorage
 
 	private admin = false
 	private permissions: Permissions = { write: false, read: false }
 	private permmanager?: PermissionManager
-	private afterOnline?: () => {}
+	private afterOnline?: () => void
 	private apply = this.applyInit
 
 	private _watcher?: FSWatcher
@@ -148,7 +150,10 @@ export default class Vessel {
 		this.index.mergewithlocal()
 		this._server = new VesselServer(this, this.nid.host, this.nid.port)
 		this._setupready = this.setupEvents()
-		// this.afterOnline = () => this.joinvia(nid) call this.updateCargo after online
+		this.afterOnline = () => {
+			const p = this.proxylist[randint(0, this.proxylist.length)]
+			this.updateCargo(p.fetchIndex(), p)
+		}
 		return this
 	}
 
@@ -301,7 +306,7 @@ export default class Vessel {
 		if (this.ignores.has(path)) return
 
 		const item = CargoList.Item(this.remRoot(path), type, action, this.user)
-		item.onDevice = true
+		//item.onDevice = true
 
 		const latest = this.index.getLatest(item.path)
 		if (latest && statSync(path).mtimeMs < latest.lastModified) return
@@ -320,15 +325,14 @@ export default class Vessel {
 	private applyLocal(path: string, type: IT, action: AT): void {
 		if (!this.permissions.write) return
 		if (this.ignores.has(path)) return
-		if (this.skiplist.delete(path)) return
+		if (this.skiplist.reduce(path)) return
 
 		const item = CargoList.Item(this.remRoot(path), type, action, this.user)
-		item.onDevice = true
+		//item.onDevice = true
 		if (action === AT.Change || action === AT.Remove) {
 			const latest = this.index.getLatest(item.path)
-			if (!latest) throw Error("latest === null")
-			item.id = latest.id
-			item.clock = increment(latest.clock, this.user)
+			item.id = latest?.id ?? item.id
+			item.clock = latest ? increment(latest.clock, this.user) : item.clock
 		}
 		if (type === IT.File && (action === AT.Add || action === AT.Change))
 			item.hash = this.store.computehash(path)
@@ -353,9 +357,9 @@ export default class Vessel {
 		this.logger(this.loggerconf.remote, "<-", item.lastAction, item.path)
 
 		this.index.apply(item).forEach(res => {
-			if (res.ro === RO.LWW && res.new) this.applyIO(res.after, rs)
-			else if (res.new) this.applyIO(res.after, rs)
-			else if (res.fetch && res.before) this.store.move(res.before, res.after)
+			//if (res.ro === RO.LWW && res.new) this.applyIO(res.after, rs)
+			if (res.new) this.applyIO(res.after, rs)
+			else if (res.rename && res.before) this.moveFile(res.before, res.after)
 			else throw Error()
 		})
 		this.index.save()
@@ -363,17 +367,27 @@ export default class Vessel {
 		//TODO: forward to known peers
 	}
 
-	private applyIO(item: Item, rs?: NodeJS.ReadableStream) {
-		item.onDevice = !item.tomb
-		const fullpath = join(this.root, item.path)
-		this.skiplist.add(fullpath)
+	private moveFile(from: Item, to: Item): void {
+		this.skiplist.set(this.store.fullpath(to), 2)
+		this.store.move(from, to)
+	}
+
+	private applyIO(item: Item, rs?: NodeJS.ReadableStream): void {
+		//item.onDevice = !item.tomb
+		const fullpath = this.store.fullpath(item)
+		this.skiplist.add(fullpath, 1)
 		if (item.type === IT.Dir && !this.store.applyFolderIO(item))
-			this.skiplist.delete(fullpath)
+			this.skiplist.reduce(fullpath)
 		else if (item.type === IT.File && !this.store.applyFileIO(item, rs))
-			this.skiplist.delete(fullpath)
+			this.skiplist.reduce(fullpath)
 	}
 
 	getRS(item: Item): NodeJS.ReadableStream | null {
+		// TODO: user local latest and traverse tomb
+		//const latest = this.index.findById(item)
+		//console.log(item.id, latest?.id, latest?.tomb)
+		//if (!latest) return null
+		//console.log(item.tomb)
 		const rs = this.store.createRS(item)
 		if (rs) this.logger(this.loggerconf.send, "SENDING", item.path)
 		return rs
@@ -399,15 +413,19 @@ export default class Vessel {
 		const items = await index
 		if (!items)
 			return this.logger(this.loggerconf.error, "ERROR: couldn't fetch index")
-		const newitems = items
-			.flatMap(kv => kv[1])
-			.map(i => this.index.apply(i)[0])
-			.filter(res => res.new)
-			.map(res => res.after)
-		this.index.save()
-		proxy.fetchItems(newitems).forEach(async (prs, i) => {
-			this.applyIO(newitems[i], (await prs) ?? undefined)
+		const resarr = items
+			.flatMap(([_, v]) => v)
+			.flatMap(i => this.index.apply(i))
+		resarr
+			.filter(i => i.rename && !i.new)
+			.forEach(res => res.before && this.moveFile(res.before, res.after))
+		const newitems = resarr.filter(i => i.new)
+		const befores = newitems.map(i => i.before ?? i.after)
+		const afters = newitems.map(i => i.after) // TODO: get dst from tomb
+		proxy.fetchItems(befores).forEach(async (prs, i) => {
+			this.applyIO(afters[i], (await prs) ?? undefined)
 		})
+		this.index.save()
 	}
 
 	// TODO
