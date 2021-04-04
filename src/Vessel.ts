@@ -150,10 +150,8 @@ export default class Vessel {
 		this.index.mergewithlocal()
 		this._server = new VesselServer(this, this.nid.host, this.nid.port)
 		this._setupready = this.setupEvents()
-		this.afterOnline = () => {
-			const p = this.proxylist[randint(0, this.proxylist.length)]
-			this.updateCargo(p.fetchIndex(), p)
-		}
+		this.afterOnline = () =>
+			this.proxylist.forEach(p => this.updateCargo(p.fetchIndex(), p))
 		return this
 	}
 
@@ -384,7 +382,8 @@ export default class Vessel {
 
 	getRS(item: Item): NodeJS.ReadableStream | null {
 		// TODO: user local latest and traverse tomb
-		//const latest = this.index.findById(item)
+		const latest = this.index.findById(item)
+		if (latest?.id !== item.id) console.log(this.user, "Sending wrong file")
 		//console.log(item.id, latest?.id, latest?.tomb)
 		//if (!latest) return null
 		//console.log(item.tomb)

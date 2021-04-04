@@ -116,8 +116,11 @@ export default class HTTPProxy extends Proxy {
 	}
 
 	async addPeer(src: NID): Promise<ResponseCode> {
-		this.fetch(APIS.addpeer, { body: JSON.stringify(src) })
-		return ResponseCode.DNE // TODO: ¯\_(ツ)_/¯
+		const res = await this.fetch(APIS.addpeer, { body: JSON.stringify(src) })
+		if (!res) throw Error("no res")
+		const resobj: VesselResponse = await res.json()
+		if (resobj.code !== ResponseCode.DNE) throw Error(resobj.msg) // TODO: error logic
+		return resobj.code
 	}
 
 	async getPriv(src: NID): Promise<PermissionGrant | null> {

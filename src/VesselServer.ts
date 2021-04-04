@@ -126,7 +126,7 @@ export default class VesselServer {
 		)
 
 		this.server.post<{ Body: NID; Reply: VesselResponse }>(
-			"/item/data/addpeer",
+			"/addpeer",
 			async req => {
 				// Assuming no updateCargo is needed
 				if (this.vessel.proxylist.has(req.body))
