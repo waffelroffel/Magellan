@@ -184,7 +184,7 @@ export default class Vessel {
 	}
 
 	disconnect(): void {
-		this.logger(true, "OFFLINE")
+		this.logger(this.loggerconf.offline, "OFFLINE")
 		this.online = false
 		this.watcher.close()
 		this.server.close()
@@ -381,14 +381,13 @@ export default class Vessel {
 	}
 
 	getRS(item: Item): NodeJS.ReadableStream | null {
-		// TODO: user local latest and traverse tomb
-		const latest = this.index.findById(item)
+		let latest = this.index.findById(item)
+		while (latest?.tomb && latest.tomb.movedTo)
+			latest = this.index.getLatest(latest.tomb.movedTo)
+		if (!latest || latest.tomb) throw Error()
 		if (latest?.id !== item.id) console.log(this.user, "Sending wrong file")
-		//console.log(item.id, latest?.id, latest?.tomb)
-		//if (!latest) return null
-		//console.log(item.tomb)
-		const rs = this.store.createRS(item)
-		if (rs) this.logger(this.loggerconf.send, "SENDING", item.path)
+		const rs = this.store.createRS(latest)
+		if (rs) this.logger(this.loggerconf.send, "SENDING", latest.path)
 		return rs
 	}
 
@@ -447,26 +446,4 @@ export default class Vessel {
 		this.saveSettings()
 		return invite
 	}
-}
-
-if (require.main === module) {
-	const opts = {
-		loggerconf: {
-			init: false,
-			//ready: false,
-			update: false,
-			//local: false,
-			send: false,
-			//online: false,
-		},
-		filerp: DupFileConfig,
-		dirrp: DupDirConfig,
-	}
-
-	const evan = new Vessel("evan", join("testroot", "evan"), opts)
-		.new(ST.All2All)
-		.connect()
-	const dave = new Vessel("dave", join("testroot", "dave"), opts)
-		.join(evan.nid)
-		.connect()
 }

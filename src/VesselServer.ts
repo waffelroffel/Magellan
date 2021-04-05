@@ -46,13 +46,13 @@ export default class VesselServer {
 	}
 
 	private setupClientApi(): void {
-		this.server.post<{ Querystring: { cmd: string }; Reply: VesselResponse }>(
+		this.server.get<{ Querystring: { cmd: string }; Reply: VesselResponse }>(
 			"/",
 			async req => {
 				if (req.hostname.split(":")[0] !== "localhost")
 					return { msg: "no remote execution", code: RC.ERR }
 				switch (req.query.cmd) {
-					case "connect":
+					case "nid":
 						return { msg: `vessel nid: ${this.vessel.nid}`, code: RC.DNE }
 					case "connect":
 						this.vessel.connect()

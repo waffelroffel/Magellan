@@ -38,6 +38,7 @@ export interface LoggerConfig {
 	remote?: boolean
 	error?: boolean
 	online?: boolean
+	offline?: boolean
 	vanish?: boolean
 }
 

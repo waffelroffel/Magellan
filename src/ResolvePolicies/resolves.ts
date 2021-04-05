@@ -27,8 +27,6 @@ function lww(i1: Item, i2: Item): Resolution[] {
 	}
 }
 
-// TODO: need to copy file to temporary location after each action
-// or refetch from network
 function dup(i1: Item, i2: Item): Resolution[] {
 	if (i1.lastActionBy === i2.lastActionBy) throw Error("TEMP: dup")
 
