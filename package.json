@@ -8,9 +8,8 @@
 	},
 	"scripts": {
 		"deps": "npm i",
-		"setup": "ts-node testing/setup_env.test.ts",
-		"test-start": "ts-node testing/initial_sync.test.ts",
-		"test-runtime": "ts-node testing/runtime.test.ts"
+		"setup": "ts-node tests/setup_env.ts",
+		"test": "jest"
 	},
 	"dependencies": {
 		"chokidar": "^3.5.1",
@@ -20,9 +19,12 @@
 		"uuid": "^8.3.2"
 	},
 	"devDependencies": {
+		"@types/jest": "^26.0.22",
 		"@types/node": "^14.14.22",
 		"@types/node-fetch": "^2.5.8",
 		"@types/uuid": "^8.3.0",
+		"jest": "^26.6.3",
+		"ts-jest": "^26.5.4",
 		"ts-node": "^9.1.1",
 		"typescript": "^4.1.3"
 	}

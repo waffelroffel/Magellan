@@ -1,6 +1,6 @@
 import { mkdirSync, rmdirSync, writeFileSync } from "fs"
 import { join, sep } from "path"
-import { TESTROOT } from "./config.test"
+import { TESTROOT } from "./config"
 
 export default function make_test_env(
 	users: string[],
@@ -13,7 +13,7 @@ export default function make_test_env(
 	const roots = users.map(u => join(TESTROOT, u))
 	roots.forEach((r, i) => make_sub_files(r, depth[i], width[i]))
 
-	console.log("Finished initializing test environment")
+	//console.log("Finished initializing test environment")
 }
 
 function make_sub_files(root: string, depth: number, width: number): void {

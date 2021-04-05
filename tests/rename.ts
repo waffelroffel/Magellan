@@ -1,10 +1,10 @@
 import { writeFileSync } from "fs"
 import { join } from "path"
 import Vessel from "../src/Vessel"
-import { TESTROOT } from "./config.test"
-import make_test_env from "./setup_env.test"
-import { assert_index_and_files } from "./utils.test"
-
+import { TESTROOT } from "./config"
+import make_test_env from "./setup_env"
+import { assertDirsAndFiles, assertIndices } from "./utils"
+// TODO: deactivate watcher
 const settings = [
 	{
 		user: "dave",
@@ -131,6 +131,9 @@ setTimeout(() => {
 	roots.forEach((r, i) => writeFileSync(join(r, f), users[i]))
 	setTimeout(() => {
 		vessels.forEach(v => v.connect())
-		assert_index_and_files(vessels, roots, 2000, "Post")
-	}, 4000)
-}, 2000)
+		setTimeout(() => {
+			console.log("Indices equal:", assertIndices(vessels))
+			console.log("Dirs and Files equal:", assertDirsAndFiles(roots))
+		}, 3000)
+	}, 5000)
+}, 3000)
