@@ -1,6 +1,6 @@
 import fastify, { FastifyInstance } from "fastify"
 import CargoList from "./CargoList"
-import { ActionType, Medium, PERMISSION, ResponseCode as RC } from "./enums"
+import { ActionType, PERMISSION, ResponseCode as RC } from "./enums"
 import {
 	Item,
 	NID,
@@ -70,12 +70,11 @@ export default class VesselServer {
 		)
 	}
 
-	// TODO: add response type validation
 	private setupRoutes(): void {
 		this.server.get<{ Reply: VesselResponse<IndexArray> }>(
 			"/index",
 			async () => {
-				return { msg: "Index", code: RC.DNE, data: this.vessel.index.asArray() }
+				return { msg: "Index", code: RC.DNE, data: this.vessel.getIndexArray() }
 			}
 		)
 
@@ -119,7 +118,8 @@ export default class VesselServer {
 			"/item/data/:sid",
 			async req => {
 				const item = this.tempitems.get(req.params.sid)
-				if (!item) return { msg: "Item not in templist", code: RC.ERR }
+				if (!item) return { msg: "Sid not in queue", code: RC.ERR }
+				this.tempitems.delete(req.params.sid)
 				this.vessel.applyIncoming(item, req.raw) // TODO: req.body, return boolean ?
 				return { msg: "Transfer successful", code: RC.DNE }
 			}
@@ -129,10 +129,8 @@ export default class VesselServer {
 			"/addpeer",
 			async req => {
 				// Assuming no updateCargo is needed
-				if (this.vessel.proxylist.has(req.body))
-					return { msg: "Peer already added", code: RC.DNE }
-				this.vessel.proxylist.addNode(Medium.http, { nid: req.body })
-				this.vessel.saveSettings() // TODO: move inside Vessel
+				if (this.vessel.addPeer(req.body))
+					return { msg: "Peer already registred", code: RC.DNE }
 				return { msg: "Peer added", code: RC.DNE }
 			}
 		)

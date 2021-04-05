@@ -8,7 +8,6 @@ import {
 	Medium,
 	SHARE_TYPE as ST,
 	PERMISSION,
-	ResolveOption as RO,
 } from "./enums"
 import {
 	Item,
@@ -29,7 +28,6 @@ import LocalProxy from "./Proxies/LocalProxy"
 import PermissionManager from "./Permissions"
 import ABCStorage from "./Storages/ABCStorage"
 import { LocalStorage } from "./Storages/LocalDrive"
-import { DupDirConfig, DupFileConfig } from "./ResolvePolicies/defaultconfigs"
 import SkipList from "./SkipList"
 
 const TABLE_END = "indextable.json"
@@ -63,10 +61,8 @@ export default class Vessel {
 	tablePath = TABLE_END
 	settingsEnd = SETTINGS_END
 	settingsPath = SETTINGS_END
-	index: CargoList
 	skiplist = new SkipList()
 	init: boolean = true
-	proxylist = new ProxyInterface()
 	ignores: Set<string>
 	nid: NID
 	loggerconf: LoggerConfig
@@ -74,6 +70,8 @@ export default class Vessel {
 	synced = false
 	store: ABCStorage
 
+	private index: CargoList
+	private proxylist = new ProxyInterface()
 	private admin = false
 	private permissions: Permissions = { write: false, read: false }
 	private permmanager?: PermissionManager
@@ -143,6 +141,17 @@ export default class Vessel {
 			online: conf?.online ?? DEFAULT_LOGGER.online,
 			vanish: conf?.vanish ?? DEFAULT_LOGGER.vanish,
 		}
+	}
+
+	getIndexArray(): IndexArray {
+		return this.index.asArray()
+	}
+
+	addPeer(nid: NID): boolean {
+		if (this.proxylist.has(nid)) return false
+		this.proxylist.addNode(Medium.http, { nid })
+		this.saveSettings()
+		return true
 	}
 
 	rejoin(): Vessel {
