@@ -4,7 +4,7 @@ import Vessel from "../src/Vessel"
 import { TESTROOT } from "./config"
 import make_test_env from "./setup_env"
 import { assertDirsAndFiles, assertIndices } from "./utils"
-// TODO: deactivate watcher
+
 const settings = [
 	{
 		user: "dave",
@@ -130,6 +130,7 @@ const f = "dup.txt"
 setTimeout(() => {
 	roots.forEach((r, i) => writeFileSync(join(r, f), users[i]))
 	setTimeout(() => {
+		vessels.forEach(v => v.watcher.close()) // BUG: sometimes moving files triggers additional events
 		vessels.forEach(v => v.connect())
 		setTimeout(() => {
 			console.log("Indices equal:", assertIndices(vessels))

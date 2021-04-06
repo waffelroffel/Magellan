@@ -57,10 +57,10 @@ export function comp(vc1: VectorClock, vc2: VectorClock): number {
 	})
 
 	let [gt, lt] = [0, 0]
-	for (const [v1, v2] of all.values()) {
+	all.forEach(([v1, v2]) => {
 		if (v1 < v2) gt = 1
 		else if (v1 > v2) lt = 1
-	}
+	})
 	return gt - lt
 }
 

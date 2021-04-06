@@ -70,8 +70,8 @@ export default class Vessel {
 	synced = false
 	store: ABCStorage
 
-	private index: CargoList
-	private proxylist = new ProxyInterface()
+	private _index: CargoList
+	private _proxylist = new ProxyInterface()
 	private admin = false
 	private permissions: Permissions = { write: false, read: false }
 	private permmanager?: PermissionManager
@@ -83,6 +83,14 @@ export default class Vessel {
 	private _sharetype?: ST
 	private _setupready?: Promise<void>
 
+	get index(): CargoList {
+		return this._index
+	}
+
+	get proxylist(): ProxyInterface {
+		return this._proxylist
+	}
+
 	get isAdmin(): boolean {
 		return this.admin
 	}
@@ -91,7 +99,7 @@ export default class Vessel {
 		return this.resolve(this._sharetype)
 	}
 
-	private get watcher(): FSWatcher {
+	get watcher(): FSWatcher {
 		return this.resolve(this._watcher)
 	}
 
@@ -114,7 +122,7 @@ export default class Vessel {
 			.add(this.root)
 			.add(this.tablePath)
 			.add(this.settingsPath)
-		this.index = new CargoList(root, opts)
+		this._index = new CargoList(root, opts)
 		this.nid = { host: "localhost", port: randint(8000, 8888) } // TODO:
 		this.loggerconf = this.checkLoggerConfig(opts?.loggerconf)
 		this.store = this.initStorage(root, "local")
@@ -144,23 +152,23 @@ export default class Vessel {
 	}
 
 	getIndexArray(): IndexArray {
-		return this.index.asArray()
+		return this._index.asArray()
 	}
 
 	addPeer(nid: NID): boolean {
-		if (this.proxylist.has(nid)) return false
-		this.proxylist.addNode(Medium.http, { nid })
+		if (this._proxylist.has(nid)) return false
+		this._proxylist.addNode(Medium.http, { nid })
 		this.saveSettings()
 		return true
 	}
 
 	rejoin(): Vessel {
 		this.loadSettings()
-		this.index.mergewithlocal()
+		this._index.mergewithlocal()
 		this._server = new VesselServer(this, this.nid.host, this.nid.port)
 		this._setupready = this.setupEvents()
 		this.afterOnline = () =>
-			this.proxylist.forEach(p => this.updateCargo(p.fetchIndex(), p))
+			this._proxylist.forEach(p => this.updateCargo(p.fetchIndex(), p))
 		return this
 	}
 
@@ -198,19 +206,19 @@ export default class Vessel {
 		this.watcher.close()
 		this.server.close()
 		this.saveSettings()
-		this.index.save()
+		this._index.save()
 	}
 
 	private async joinvia(nid: NID): Promise<void> {
-		const proxy = this.proxylist.addNode(Medium.http, { nid })
+		const proxy = this._proxylist.addNode(Medium.http, { nid })
 		const ir = await proxy.getinvite(this.nid)
 		if (!ir)
 			return this.logger(this.loggerconf.error, "ERROR: couldn't fetch invite")
 		this._sharetype = ir.sharetype
 		this.permissions = ir.perms
 		ir.peers.forEach(nid => {
-			if (this.proxylist.has(nid)) return
-			this.proxylist.addNode(Medium.http, { nid }).addPeer(this.nid)
+			if (this._proxylist.has(nid)) return
+			this._proxylist.addNode(Medium.http, { nid }).addPeer(this.nid)
 		})
 		this.updateCargo(proxy.fetchIndex(), proxy)
 		this.saveSettings()
@@ -229,7 +237,7 @@ export default class Vessel {
 		this.settingsPath = settings.settingsPath
 		this.nid = settings.nid
 		settings.peers.forEach(peer =>
-			this.proxylist.addNode(Medium.http, { nid: peer.nid })
+			this._proxylist.addNode(Medium.http, { nid: peer.nid })
 		)
 		this._sharetype = settings.sharetype
 		this.permissions = settings.privs
@@ -251,7 +259,7 @@ export default class Vessel {
 			settingsEnd: this.settingsEnd,
 			settingsPath: this.settingsPath,
 			nid: this.nid,
-			peers: this.proxylist.serialize(),
+			peers: this._proxylist.serialize(),
 			sharetype: this.sharetype,
 			privs: this.permissions,
 			ignores: [...this.ignores],
@@ -299,7 +307,7 @@ export default class Vessel {
 				.on("ready", () => {
 					this.init = false
 					this.apply = this.applyLocal
-					this.index.save()
+					this._index.save()
 					this.logger(this.loggerconf.ready, "PLVS VLTRA!")
 					resolve()
 				})
@@ -315,7 +323,7 @@ export default class Vessel {
 		const item = CargoList.Item(this.remRoot(path), type, action, this.user)
 		//item.onDevice = true
 
-		const latest = this.index.getLatest(item.path)
+		const latest = this._index.getLatest(item.path)
 		if (latest && statSync(path).mtimeMs < latest.lastModified) return
 		if (type === IT.File) {
 			item.hash = this.store.computehash(path)
@@ -326,7 +334,7 @@ export default class Vessel {
 
 		this.logger(this.loggerconf.init && this.init, "INIT", action, item.path)
 
-		this.index.apply(item)
+		this._index.apply(item)
 	}
 
 	private applyLocal(path: string, type: IT, action: AT): void {
@@ -337,7 +345,7 @@ export default class Vessel {
 		const item = CargoList.Item(this.remRoot(path), type, action, this.user)
 		//item.onDevice = true
 		if (action === AT.Change || action === AT.Remove) {
-			const latest = this.index.getLatest(item.path)
+			const latest = this._index.getLatest(item.path)
 			item.id = latest?.id ?? item.id
 			item.clock = latest ? increment(latest.clock, this.user) : item.clock
 		}
@@ -345,16 +353,16 @@ export default class Vessel {
 			item.hash = this.store.computehash(path)
 
 		// Assuming no local conflicts
-		const resarr = this.index.apply(item)
+		const resarr = this._index.apply(item)
 		if (resarr.length > 1) throw Error("local conflicts")
-		this.index.save()
+		this._index.save()
 
 		this.logger(this.loggerconf.local, "->", action, item.path)
 		if (this.online) this.broadcast(item)
 	}
 
 	private broadcast(item: Item): void {
-		this.proxylist.broadcast(item, this.getRS(item) ?? undefined)
+		this._proxylist.broadcast(item, this.getRS(item) ?? undefined)
 	}
 
 	applyIncoming(item: Item, rs?: NodeJS.ReadableStream): void {
@@ -363,13 +371,13 @@ export default class Vessel {
 
 		this.logger(this.loggerconf.remote, "<-", item.lastAction, item.path)
 
-		this.index.apply(item).forEach(res => {
+		this._index.apply(item).forEach(res => {
 			//if (res.ro === RO.LWW && res.new) this.applyIO(res.after, rs)
 			if (res.new) this.applyIO(res.after, rs)
 			else if (res.rename && res.before) this.moveFile(res.before, res.after)
 			else throw Error()
 		})
-		this.index.save()
+		this._index.save()
 
 		//TODO: forward to known peers
 	}
@@ -390,9 +398,9 @@ export default class Vessel {
 	}
 
 	getRS(item: Item): NodeJS.ReadableStream | null {
-		let latest = this.index.findById(item)
+		let latest = this._index.findById(item)
 		while (latest?.tomb && latest.tomb.movedTo)
-			latest = this.index.getLatest(latest.tomb.movedTo)
+			latest = this._index.getLatest(latest.tomb.movedTo)
 		if (!latest || latest.tomb) throw Error()
 		if (latest?.id !== item.id) console.log(this.user, "Sending wrong file")
 		const rs = this.store.createRS(latest)
@@ -404,7 +412,7 @@ export default class Vessel {
 	 * localproxy only
 	 */
 	addVessel(vessel: Vessel): void {
-		const proxy = this.proxylist.addNode(Medium.local, { vessel })
+		const proxy = this._proxylist.addNode(Medium.local, { vessel })
 		if (!(proxy instanceof LocalProxy))
 			throw Error("Vessel.addVessel: not localproxy")
 		this.updateCargo(proxy.fetchIndex(), proxy)
@@ -422,7 +430,7 @@ export default class Vessel {
 			return this.logger(this.loggerconf.error, "ERROR: couldn't fetch index")
 		const resarr = items
 			.flatMap(([_, v]) => v)
-			.flatMap(i => this.index.apply(i))
+			.flatMap(i => this._index.apply(i))
 		resarr
 			.filter(i => i.rename && !i.new)
 			.forEach(res => res.before && this.moveFile(res.before, res.after))
@@ -432,7 +440,7 @@ export default class Vessel {
 		proxy.fetchItems(befores).forEach(async (prs, i) => {
 			this.applyIO(afters[i], (await prs) ?? undefined)
 		})
-		this.index.save()
+		this._index.save()
 	}
 
 	// TODO
@@ -447,11 +455,11 @@ export default class Vessel {
 		if (perms.write) this.permmanager.grant(PERMISSION.WRITE, nid)
 		const invite = {
 			sharetype: this.sharetype,
-			peers: this.proxylist.serialize().map(p => p.nid),
+			peers: this._proxylist.serialize().map(p => p.nid),
 			perms: perms,
 		}
 		this.permmanager.grant
-		this.proxylist.addNode(Medium.http, { nid })
+		this._proxylist.addNode(Medium.http, { nid })
 		this.saveSettings()
 		return invite
 	}
