@@ -14,12 +14,6 @@ import {
 import { uuid } from "./utils"
 import Vessel from "./Vessel"
 
-// TODO: move or remove
-const DEFAULT_SETTINGS = {
-	HOST: "localhost",
-	PORT: 8000,
-}
-
 export default class VesselServer {
 	host: string
 	port: number
@@ -27,14 +21,14 @@ export default class VesselServer {
 	vessel: Vessel
 	tempitems = new Map<string, Item>()
 
-	constructor(vessel: Vessel, host?: string, port?: number) {
+	constructor(vessel: Vessel, host: string, port: number) {
 		this.vessel = vessel
-		this.host = host ?? DEFAULT_SETTINGS.HOST
-		this.port = port ?? DEFAULT_SETTINGS.PORT
+		this.host = host
+		this.port = port
 		this.server = fastify()
 		this.setupClientApi()
 		this.setupRoutes()
-		this.server.addContentTypeParser("application/binary", (r, q, d) => d(null))
+		this.server.addContentTypeParser("app/binary", (_, __, d) => d(null))
 	}
 
 	listen(): Promise<string> {

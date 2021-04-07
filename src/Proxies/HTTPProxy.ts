@@ -24,7 +24,7 @@ export const APIS: VesselAPIs = {
 	senditemdata: {
 		end: "/item/data/",
 		method: "POST",
-		headers: { "content-type": "application/binary" },
+		headers: { "content-type": "app/binary" },
 	},
 	getitem: {
 		end: "/item",

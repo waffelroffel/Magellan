@@ -1,6 +1,6 @@
 import { watch as chokidar } from "chokidar"
-import { FSWatcher, writeFileSync, readFileSync, statSync } from "fs"
-import { join, sep } from "path"
+import { FSWatcher, writeFileSync, readFileSync } from "fs"
+import { join, resolve as abspath } from "path"
 import CargoList from "./CargoList"
 import {
 	ItemType as IT,
@@ -18,7 +18,7 @@ import {
 	Invite,
 	VesselOptions,
 	IndexArray,
-	ProxyRes,
+	Resolution,
 } from "./interfaces"
 import ProxyInterface from "./ProxyInterface"
 import { cts, increment, randint } from "./utils"
@@ -29,20 +29,7 @@ import PermissionManager from "./Permissions"
 import ABCStorage from "./Storages/ABCStorage"
 import { LocalStorage } from "./Storages/LocalDrive"
 import SkipList from "./SkipList"
-
-const TABLE_END = "indextable.json"
-const SETTINGS_END = "settings.json"
-const DEFAULT_LOGGER: LoggerConfig = {
-	init: true,
-	ready: true,
-	update: true,
-	send: true,
-	local: true,
-	remote: true,
-	error: true,
-	online: true,
-	vanish: true,
-}
+import { checkLoggerConfig } from "./defaultconf"
 
 /**
  * TODO
@@ -55,15 +42,13 @@ const DEFAULT_LOGGER: LoggerConfig = {
 export default class Vessel {
 	user: string
 	root: string
-	rooti: number
-	rootarr: string[]
-	tableEnd = TABLE_END
-	tablePath = TABLE_END
-	settingsEnd = SETTINGS_END
-	settingsPath = SETTINGS_END
+	tablepath: string
+	TABLE_END = "indextable.json"
+	settingspath: string
+	SETTINGS_END = "settings.json"
 	skiplist = new SkipList()
-	init: boolean = true
-	ignores: Set<string>
+	init = true
+	ignored: string[]
 	nid: NID
 	loggerconf: LoggerConfig
 	online = false
@@ -114,17 +99,12 @@ export default class Vessel {
 	constructor(user: string, root: string, opts?: VesselOptions) {
 		this.user = user
 		this.root = root
-		this.rooti = root.length
-		this.rootarr = root.split(sep)
-		this.tablePath = join(root, this.tableEnd)
-		this.settingsPath = join(root, this.settingsEnd)
-		this.ignores = new Set<string>()
-			.add(this.root)
-			.add(this.tablePath)
-			.add(this.settingsPath)
-		this._index = new CargoList(root, opts)
+		this.tablepath = join(root, this.TABLE_END)
+		this.settingspath = join(root, this.SETTINGS_END)
+		this.ignored = [this.TABLE_END, this.SETTINGS_END]
+		this._index = new CargoList(root, opts) // TODO: tablepath
 		this.nid = { host: "localhost", port: randint(8000, 8888) } // TODO:
-		this.loggerconf = this.checkLoggerConfig(opts?.loggerconf)
+		this.loggerconf = checkLoggerConfig(opts?.loggerconf)
 		this.store = this.initStorage(root, "local")
 	}
 
@@ -137,38 +117,31 @@ export default class Vessel {
 		}
 	}
 
-	private checkLoggerConfig(conf?: LoggerConfig): LoggerConfig {
-		return {
-			init: conf?.init ?? DEFAULT_LOGGER.init,
-			ready: conf?.ready ?? DEFAULT_LOGGER.ready,
-			update: conf?.update ?? DEFAULT_LOGGER.update,
-			send: conf?.send ?? DEFAULT_LOGGER.send,
-			local: conf?.local ?? DEFAULT_LOGGER.local,
-			remote: conf?.remote ?? DEFAULT_LOGGER.remote,
-			error: conf?.error ?? DEFAULT_LOGGER.error,
-			online: conf?.online ?? DEFAULT_LOGGER.online,
-			vanish: conf?.vanish ?? DEFAULT_LOGGER.vanish,
-		}
-	}
-
 	getIndexArray(): IndexArray {
-		return this._index.asArray()
+		return this.index.asArray()
 	}
 
 	addPeer(nid: NID): boolean {
-		if (this._proxylist.has(nid)) return false
-		this._proxylist.addNode(Medium.http, { nid })
+		if (this.proxylist.has(nid)) return false
+		this.proxylist.addNode(Medium.http, { nid })
 		this.saveSettings()
 		return true
 	}
 
 	rejoin(): Vessel {
 		this.loadSettings()
-		this._index.mergewithlocal()
+		this.index.mergewithlocal()
 		this._server = new VesselServer(this, this.nid.host, this.nid.port)
 		this._setupready = this.setupEvents()
-		this.afterOnline = () =>
-			this._proxylist.forEach(p => this.updateCargo(p.fetchIndex(), p))
+		this.afterOnline = async () => {
+			const indices: [IndexArray, Proxy][] = []
+			for (const p of this.proxylist) {
+				const index = await p.fetchIndex()
+				if (!index) throw Error()
+				indices.push([index, p])
+			}
+			this.updateCargo(indices)
+		}
 		return this
 	}
 
@@ -200,48 +173,47 @@ export default class Vessel {
 		this.logger(this.loggerconf.vanish, "POFF! GONE.")
 	}
 
+	// TODO: split
 	disconnect(): void {
 		this.logger(this.loggerconf.offline, "OFFLINE")
 		this.online = false
 		this.watcher.close()
 		this.server.close()
 		this.saveSettings()
-		this._index.save()
+		this.index.save()
 	}
 
 	private async joinvia(nid: NID): Promise<void> {
-		const proxy = this._proxylist.addNode(Medium.http, { nid })
+		const proxy = this.proxylist.addNode(Medium.http, { nid })
 		const ir = await proxy.getinvite(this.nid)
 		if (!ir)
 			return this.logger(this.loggerconf.error, "ERROR: couldn't fetch invite")
 		this._sharetype = ir.sharetype
 		this.permissions = ir.perms
 		ir.peers.forEach(nid => {
-			if (this._proxylist.has(nid)) return
-			this._proxylist.addNode(Medium.http, { nid }).addPeer(this.nid)
+			if (this.proxylist.has(nid)) return
+			this.proxylist.addNode(Medium.http, { nid }).addPeer(this.nid)
 		})
-		this.updateCargo(proxy.fetchIndex(), proxy)
+		const index = await proxy.fetchIndex()
+		if (!index) throw Error()
+		this.updateCargo([[index, proxy]])
 		this.saveSettings()
 	}
 
 	loadSettings(): Vessel {
-		const data = readFileSync(this.settingsPath, { encoding: "utf8" })
+		const data = readFileSync(this.settingspath, { encoding: "utf8" })
 		const settings: Settings = JSON.parse(data)
 		this.user = settings.user
 		this.root = settings.root
-		this.rooti = settings.rooti
-		this.rootarr = settings.rootarr
-		this.tableEnd = settings.tableEnd
-		this.tablePath = settings.tablePath
-		this.settingsEnd = settings.settingsEnd
-		this.settingsPath = settings.settingsPath
+		this.tablepath = settings.tablepath
+		this.settingspath = settings.settingspath
 		this.nid = settings.nid
 		settings.peers.forEach(peer =>
-			this._proxylist.addNode(Medium.http, { nid: peer.nid })
+			this.proxylist.addNode(Medium.http, { nid: peer.nid })
 		)
 		this._sharetype = settings.sharetype
 		this.permissions = settings.privs
-		this.ignores = new Set<string>(settings.ignores)
+		this.ignored = settings.ignored
 		this.loggerconf = settings.loggerconf
 		this.admin = settings.admin
 		return this
@@ -252,31 +224,23 @@ export default class Vessel {
 		const settings: Settings = {
 			user: this.user,
 			root: this.root,
-			rooti: this.rooti,
-			rootarr: this.rootarr,
-			tableEnd: this.tableEnd,
-			tablePath: this.tablePath,
-			settingsEnd: this.settingsEnd,
-			settingsPath: this.settingsPath,
+			tablepath: this.tablepath,
+			settingspath: this.settingspath,
 			nid: this.nid,
-			peers: this._proxylist.serialize(),
+			peers: this.proxylist.serialize(),
 			sharetype: this.sharetype,
 			privs: this.permissions,
-			ignores: [...this.ignores],
+			ignored: this.ignored,
 			loggerconf: this.loggerconf,
 			admin: this.admin,
 		}
-		writeFileSync(this.settingsPath, JSON.stringify(settings))
+		writeFileSync(this.settingspath, JSON.stringify(settings))
 		return this
 	}
 
 	private resolve<T>(value: T | undefined): T {
 		if (value === undefined) throw Error()
 		return value
-	}
-
-	private remRoot(path: string): string {
-		return path.substring(this.rooti)
 	}
 
 	logger(print?: boolean, ...msg: any[]): void {
@@ -291,23 +255,25 @@ export default class Vessel {
 
 	private setupEvents(): Promise<void> {
 		return new Promise(resolve => {
-			this._watcher = chokidar(this.root, { persistent: true })
+			this._watcher = chokidar("", {
+				cwd: abspath(this.root),
+				disableGlobbing: true,
+				ignored: this.ignored,
+				ignoreInitial: false, // TODO
+				awaitWriteFinish: { stabilityThreshold: 1000 },
+			})
 				.on("add", (path: string) => this.apply(path, IT.File, AT.Add))
 				.on("change", (path: string) => this.apply(path, IT.File, AT.Change))
 				.on("unlink", (path: string) => this.apply(path, IT.File, AT.Remove))
 				.on("addDir", (path: string) => this.apply(path, IT.Dir, AT.Add))
-				.on("unlinkDir", (path: string) => {
-					const patharr = path.split(sep)
-					if (this.rootarr.some((p, i) => p !== patharr[i])) return // when deleting folder with files, full path is returned
-					this.apply(path, IT.Dir, AT.Remove)
-				}) // TODO: error when deleting folder with folders due to order of deletion parent->child
+				.on("unlinkDir", (path: string) => this.apply(path, IT.Dir, AT.Remove)) // FIXME: error when deleting folder with folders due to order of deletion parent->child
 				.on("error", e =>
 					this.logger(this.loggerconf.error, "ERROR", e.message)
-				) // TODO: when empty folder gets deleted throws error
+				) // BUG: when empty folder gets deleted throws error TODO: add {ignorePermissionErrors: true} to chokidar
 				.on("ready", () => {
 					this.init = false
 					this.apply = this.applyLocal
-					this._index.save()
+					this.index.save()
 					this.logger(this.loggerconf.ready, "PLVS VLTRA!")
 					resolve()
 				})
@@ -315,18 +281,19 @@ export default class Vessel {
 	}
 
 	private applyInit(path: string, type: IT, action: AT): void {
+		if (path === "") return
 		if (!this.permissions.write) return
 		if (!this.init) return
 		if (action !== AT.Add) return
-		if (this.ignores.has(path)) return
 
-		const item = CargoList.Item(this.remRoot(path), type, action, this.user)
+		const item = CargoList.Item(path, type, action, this.user)
+		item.lastModified = this.store.lastmodified(item)
 		//item.onDevice = true
 
-		const latest = this._index.getLatest(item.path)
-		if (latest && statSync(path).mtimeMs < latest.lastModified) return
+		const latest = this.index.getLatest(item.path)
+		if (latest && item.lastModified < latest.lastModified) return
 		if (type === IT.File) {
-			item.hash = this.store.computehash(path)
+			item.hash = this.store.computehash(item)
 			if (latest && latest.hash !== item.hash) throw Error("hash unequal")
 			item.id = latest?.id ?? item.id
 			item.clock = latest?.clock ?? item.clock
@@ -334,74 +301,70 @@ export default class Vessel {
 
 		this.logger(this.loggerconf.init && this.init, "INIT", action, item.path)
 
-		this._index.apply(item)
+		this.index.apply(item)
 	}
 
 	private applyLocal(path: string, type: IT, action: AT): void {
 		if (!this.permissions.write) return
-		if (this.ignores.has(path)) return
 		if (this.skiplist.reduce(path)) return
 
-		const item = CargoList.Item(this.remRoot(path), type, action, this.user)
+		const item = CargoList.Item(path, type, action, this.user)
+		item.lastModified = this.store.lastmodified(item)
 		//item.onDevice = true
 		if (action === AT.Change || action === AT.Remove) {
-			const latest = this._index.getLatest(item.path)
+			const latest = this.index.getLatest(item.path)
 			item.id = latest?.id ?? item.id
 			item.clock = latest ? increment(latest.clock, this.user) : item.clock
 		}
 		if (type === IT.File && (action === AT.Add || action === AT.Change))
-			item.hash = this.store.computehash(path)
+			item.hash = this.store.computehash(item)
 
 		// Assuming no local conflicts
-		const resarr = this._index.apply(item)
+		const resarr = this.index.apply(item)
 		if (resarr.length > 1) throw Error("local conflicts")
-		this._index.save()
+		this.index.save()
 
 		this.logger(this.loggerconf.local, "->", action, item.path)
 		if (this.online) this.broadcast(item)
 	}
 
 	private broadcast(item: Item): void {
-		this._proxylist.broadcast(item, this.getRS(item) ?? undefined)
+		this.proxylist.broadcast(item, this.getRS(item) ?? undefined)
 	}
 
 	applyIncoming(item: Item, rs?: NodeJS.ReadableStream): void {
 		if (!this.permissions.read) return // TODO: ¯\_(ツ)_/¯
-		if (this.ignores.has(item.path)) return
 
 		this.logger(this.loggerconf.remote, "<-", item.lastAction, item.path)
 
-		this._index.apply(item).forEach(res => {
+		this.index.apply(item).forEach(res => {
 			//if (res.ro === RO.LWW && res.new) this.applyIO(res.after, rs)
 			if (res.new) this.applyIO(res.after, rs)
 			else if (res.rename && res.before) this.moveFile(res.before, res.after)
 			else throw Error()
 		})
-		this._index.save()
+		this.index.save()
 
 		//TODO: forward to known peers
 	}
 
 	private moveFile(from: Item, to: Item): void {
-		this.skiplist.set(this.store.fullpath(to), 2)
+		this.skiplist.set(to.path, 1)
 		this.store.move(from, to)
 	}
 
 	private applyIO(item: Item, rs?: NodeJS.ReadableStream): void {
 		//item.onDevice = !item.tomb
-		const fullpath = this.store.fullpath(item)
-		this.skiplist.add(fullpath, 1)
+		this.skiplist.add(item.path, 1)
 		if (item.type === IT.Dir && !this.store.applyFolderIO(item))
-			this.skiplist.reduce(fullpath)
+			this.skiplist.reduce(item.path)
 		else if (item.type === IT.File && !this.store.applyFileIO(item, rs))
-			this.skiplist.reduce(fullpath)
+			this.skiplist.reduce(item.path)
 	}
 
 	getRS(item: Item): NodeJS.ReadableStream | null {
-		let latest = this._index.findById(item)
-		while (latest?.tomb && latest.tomb.movedTo)
-			latest = this._index.getLatest(latest.tomb.movedTo)
-		if (!latest || latest.tomb) throw Error()
+		const latest = this.index.dig(item)
+		if (latest.tomb) throw Error()
 		if (latest?.id !== item.id) console.log(this.user, "Sending wrong file")
 		const rs = this.store.createRS(latest)
 		if (rs) this.logger(this.loggerconf.send, "SENDING", latest.path)
@@ -412,35 +375,38 @@ export default class Vessel {
 	 * localproxy only
 	 */
 	addVessel(vessel: Vessel): void {
-		const proxy = this._proxylist.addNode(Medium.local, { vessel })
+		const proxy = this.proxylist.addNode(Medium.local, { vessel })
 		if (!(proxy instanceof LocalProxy))
 			throw Error("Vessel.addVessel: not localproxy")
-		this.updateCargo(proxy.fetchIndex(), proxy)
+		this.updateCargo([[proxy.fetchIndex(), proxy]])
 		proxy.addPeer(vessel)
 	}
 
-	private async updateCargo(
-		index: ProxyRes<IndexArray>,
-		proxy: Proxy
-	): Promise<void> {
+	private async updateCargo(indices: [IndexArray, Proxy][]): Promise<void> {
 		this.logger(this.loggerconf.update, "UPDATING")
+		const itemarr: [Item, Proxy][] = []
+		indices.forEach(([index, p]) =>
+			index.forEach(([_, v]) => v.forEach(i => itemarr.push([i, p])))
+		)
+		const ressarr: [Resolution, Proxy][] = []
+		itemarr.map(([i, p]) =>
+			this.index.apply(i).forEach(res => ressarr.push([res, p]))
+		)
 
-		const items = await index
-		if (!items)
-			return this.logger(this.loggerconf.error, "ERROR: couldn't fetch index")
-		const resarr = items
-			.flatMap(([_, v]) => v)
-			.flatMap(i => this._index.apply(i))
-		resarr
-			.filter(i => i.rename && !i.new)
-			.forEach(res => res.before && this.moveFile(res.before, res.after))
-		const newitems = resarr.filter(i => i.new)
-		const befores = newitems.map(i => i.before ?? i.after)
-		const afters = newitems.map(i => i.after) // TODO: get dst from tomb
-		proxy.fetchItems(befores).forEach(async (prs, i) => {
-			this.applyIO(afters[i], (await prs) ?? undefined)
+		ressarr.forEach(([res, _]) => {
+			if (res.rename && !res.new) {
+				if (res.before) this.moveFile(res.before, res.after)
+			}
 		})
-		this._index.save()
+
+		ressarr.forEach(([res, p]) => {
+			if (!res.new) return
+			p.fetchItems([res.before ?? res.after]).forEach(async prs =>
+				this.applyIO(res.after, (await prs) ?? undefined)
+			)
+		})
+
+		this.index.save()
 	}
 
 	// TODO
@@ -455,11 +421,11 @@ export default class Vessel {
 		if (perms.write) this.permmanager.grant(PERMISSION.WRITE, nid)
 		const invite = {
 			sharetype: this.sharetype,
-			peers: this._proxylist.serialize().map(p => p.nid),
+			peers: this.proxylist.serialize().map(p => p.nid),
 			perms: perms,
 		}
 		this.permmanager.grant
-		this._proxylist.addNode(Medium.http, { nid })
+		this.proxylist.addNode(Medium.http, { nid })
 		this.saveSettings()
 		return invite
 	}

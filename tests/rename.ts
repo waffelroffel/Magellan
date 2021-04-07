@@ -9,12 +9,8 @@ const settings = [
 	{
 		user: "dave",
 		root: "testroot\\dave",
-		rooti: 13,
-		rootarr: ["testroot", "dave"],
-		tableEnd: "indextable.json",
-		tablePath: "testroot\\dave\\indextable.json",
-		settingsEnd: "settings.json",
-		settingsPath: "testroot\\dave\\settings.json",
+		tablepath: "testroot\\dave\\indextable.json",
+		settingspath: "testroot\\dave\\settings.json",
 		nid: { host: "localhost", port: 8617 },
 		peers: [
 			{ nid: { host: "localhost", port: 8124 } },
@@ -22,16 +18,12 @@ const settings = [
 		],
 		sharetype: "A2A",
 		privs: { write: true, read: true },
-		ignores: [
-			"testroot\\dave",
-			"testroot\\dave\\indextable.json",
-			"testroot\\dave\\settings.json",
-		],
+		ignored: ["indextable.json", "settings.json"],
 		loggerconf: {
 			init: false,
 			ready: false,
 			update: false,
-			send: true,
+			send: false,
 			local: true,
 			remote: true,
 			error: true,
@@ -43,12 +35,8 @@ const settings = [
 	{
 		user: "evan",
 		root: "testroot\\evan",
-		rooti: 13,
-		rootarr: ["testroot", "evan"],
-		tableEnd: "indextable.json",
-		tablePath: "testroot\\evan\\indextable.json",
-		settingsEnd: "settings.json",
-		settingsPath: "testroot\\evan\\settings.json",
+		tablepath: "testroot\\evan\\indextable.json",
+		settingspath: "testroot\\evan\\settings.json",
 		nid: { host: "localhost", port: 8124 },
 		peers: [
 			{ nid: { host: "localhost", port: 8617 } },
@@ -56,16 +44,12 @@ const settings = [
 		],
 		sharetype: "A2A",
 		privs: { write: true, read: true },
-		ignores: [
-			"testroot\\evan",
-			"testroot\\evan\\indextable.json",
-			"testroot\\evan\\settings.json",
-		],
+		ignored: ["indextable.json", "settings.json"],
 		loggerconf: {
 			init: false,
 			ready: false,
 			update: false,
-			send: true,
+			send: false,
 			local: true,
 			remote: true,
 			error: true,
@@ -77,12 +61,8 @@ const settings = [
 	{
 		user: "frank",
 		root: "testroot\\frank",
-		rooti: 14,
-		rootarr: ["testroot", "frank"],
-		tableEnd: "indextable.json",
-		tablePath: "testroot\\frank\\indextable.json",
-		settingsEnd: "settings.json",
-		settingsPath: "testroot\\frank\\settings.json",
+		tablepath: "testroot\\frank\\indextable.json",
+		settingspath: "testroot\\frank\\settings.json",
 		nid: { host: "localhost", port: 8554 },
 		peers: [
 			{ nid: { host: "localhost", port: 8617 } },
@@ -90,16 +70,12 @@ const settings = [
 		],
 		sharetype: "A2A",
 		privs: { write: true, read: true },
-		ignores: [
-			"testroot\\frank",
-			"testroot\\frank\\indextable.json",
-			"testroot\\frank\\settings.json",
-		],
+		ignored: ["indextable.json", "settings.json"],
 		loggerconf: {
 			init: false,
 			ready: false,
 			update: false,
-			send: true,
+			send: false,
 			local: true,
 			remote: true,
 			error: true,
@@ -130,11 +106,12 @@ const f = "dup.txt"
 setTimeout(() => {
 	roots.forEach((r, i) => writeFileSync(join(r, f), users[i]))
 	setTimeout(() => {
-		vessels.forEach(v => v.watcher.close()) // BUG: sometimes moving files triggers additional events
+		vessels.forEach(v => v.watcher.close())
 		vessels.forEach(v => v.connect())
 		setTimeout(() => {
+			vessels.forEach(v => v.disconnect())
 			console.log("Indices equal:", assertIndices(vessels))
 			console.log("Dirs and Files equal:", assertDirsAndFiles(roots))
-		}, 3000)
-	}, 5000)
-}, 3000)
+		}, 2000)
+	}, 2000)
+}, 1000)

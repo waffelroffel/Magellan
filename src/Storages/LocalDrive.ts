@@ -7,8 +7,7 @@ import {
 	rmSync,
 	createWriteStream,
 	createReadStream,
-	renameSync,
-	write,
+	statSync,
 	writeFileSync,
 } from "fs"
 import { join } from "path"
@@ -28,13 +27,17 @@ export class LocalStorage extends ABCStorage {
 		this.root = root
 	}
 
-	fullpath(item: Item): string {
+	abspath(item: Item): string {
 		return join(this.root, item.path)
 	}
 
-	computehash(path: string): string {
+	lastmodified(item: Item): number {
+		return statSync(this.abspath(item)).mtimeMs
+	}
+
+	computehash(item: Item): string {
 		const hash = createHash("sha256")
-		return hash.update(readFileSync(path)).digest("hex") // TODO: change to stream
+		return hash.update(readFileSync(this.abspath(item))).digest("hex") // TODO: change to stream
 		/*return new Promise(resolve =>
             createReadStream(path)
                 .on("end", () => resolve(hash.digest("hex")))
@@ -43,23 +46,23 @@ export class LocalStorage extends ABCStorage {
 	}
 
 	applyFolderIO(item: Item): boolean {
-		const fullpath = this.fullpath(item)
-		const exists = existsSync(fullpath)
+		const abspath = this.abspath(item)
+		const exists = existsSync(abspath)
 		if (item.lastAction === ActionType.Remove && exists) {
-			rmdirSync(fullpath, { recursive: true })
+			rmdirSync(abspath, { recursive: true })
 			return true
 		} else if (item.lastAction === ActionType.Add && !exists) {
-			mkdirSync(fullpath, { recursive: true })
+			mkdirSync(abspath, { recursive: true })
 			return true
 		}
 		return false
 	}
 
 	applyFileIO(item: Item, rs?: NodeJS.ReadableStream): boolean {
-		const fullpath = this.fullpath(item)
-		const exists = existsSync(fullpath)
+		const abspath = this.abspath(item)
+		const exists = existsSync(abspath)
 		if (item.lastAction === ActionType.Remove && exists) {
-			rmSync(fullpath)
+			rmSync(abspath)
 			return true
 		} else if (
 			// TODO: split rename to renamedFrom and renamedTo
@@ -68,7 +71,7 @@ export class LocalStorage extends ABCStorage {
 			) &&
 			rs
 		) {
-			rs.pipe(createWriteStream(fullpath))
+			rs.pipe(createWriteStream(abspath))
 			return true
 		}
 		return false
@@ -77,12 +80,10 @@ export class LocalStorage extends ABCStorage {
 	createRS(item: Item): NodeJS.ReadableStream | null {
 		if (item.type === ItemType.Dir || item.lastAction === ActionType.Remove)
 			return null
-		return createReadStream(this.fullpath(item))
+		return createReadStream(this.abspath(item))
 	}
 
 	move(from: Item, to: Item): void {
-		createReadStream(this.fullpath(from)).pipe(
-			createWriteStream(this.fullpath(to))
-		)
+		writeFileSync(this.abspath(to), readFileSync(this.abspath(from))) // TODO: change to stream
 	}
 }

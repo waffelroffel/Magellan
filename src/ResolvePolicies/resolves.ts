@@ -6,7 +6,14 @@ import { comp, deepcopy, identical } from "../utils"
 function compLamport(i1: Item, i2: Item): boolean {
 	return i1.lastModified !== i2.lastModified
 		? i1.lastModified < i2.lastModified
-		: i1.lastActionBy < i2.lastActionBy
+		: compUser(i1, i2)
+}
+
+function compUser(i1: Item, i2: Item): boolean {
+	const cond = i1.lastActionBy.localeCompare(i2.lastActionBy)
+	if (cond < 0) return true
+	if (cond > 0) return false
+	throw Error()
 }
 
 function lww(i1: Item, i2: Item): Resolution[] {

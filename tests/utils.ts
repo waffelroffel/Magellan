@@ -1,9 +1,8 @@
-import { readdirSync } from "fs"
+import { createHash } from "crypto"
+import { readdirSync, readFileSync } from "fs"
 import { join } from "path"
 import { Item, Tomb, VectorClock } from "../src/interfaces"
-import { LocalStorage } from "../src/Storages/LocalDrive"
 import Vessel from "../src/Vessel"
-import { TESTROOT } from "./config"
 
 // UTILS
 export async function delay(ms: number): Promise<void> {
@@ -23,9 +22,11 @@ function allSame<T>(arr: T[]): boolean {
 	return arr.every(e => e === arr[0])
 }
 
-// COMPARE FIELS AND DIRECTORIES
-const local = new LocalStorage(TESTROOT)
+function hash(path: string): string {
+	return createHash("sha256").update(readFileSync(path)).digest("hex")
+}
 
+// COMPARE FIELS AND DIRECTORIES
 export function assertDirsAndFiles(roots: string[]): boolean {
 	const arrs = roots.map(r => getAllFiles(r))
 	const dirs = arrs.map(arr => arr[0])
@@ -40,8 +41,8 @@ export function assertDirsAndFiles(roots: string[]): boolean {
 
 function equalContent(nfiles: string[][], roots: string[]): boolean {
 	const tposed = transpose(nfiles)
-	const nfullpaths = tposed.map(files => roots.map((r, i) => join(r, files[i])))
-	const nhashes = nfullpaths.map(paths => paths.map(p => local.computehash(p)))
+	const nabspaths = tposed.map(files => roots.map((r, i) => join(r, files[i])))
+	const nhashes = nabspaths.map(paths => paths.map(p => hash(p)))
 	return nhashes.map(hashes => allSame(hashes)).every(Boolean)
 }
 

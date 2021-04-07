@@ -14,17 +14,13 @@ import Vessel from "./Vessel"
 export interface Settings {
 	user: string
 	root: string
-	rooti: number
-	rootarr: string[]
-	tableEnd: string
-	tablePath: string
-	settingsEnd: string
-	settingsPath: string
+	tablepath: string
+	settingspath: string
 	nid: NID
 	peers: { nid: NID }[]
 	sharetype: SHARE_TYPE
 	privs: Permissions
-	ignores: string[]
+	ignored: string[]
 	loggerconf: LoggerConfig
 	admin: boolean
 }

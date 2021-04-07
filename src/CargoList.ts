@@ -34,9 +34,7 @@ export default class CargoList {
 	private rsdirp: Map<string, RO>
 
 	get DUMMY(): Item {
-		const dummy = CargoList.Item("", IT.File, AT.Change, "zzz")
-		dummy.lastModified = 0
-		return dummy
+		return CargoList.Item("", IT.File, AT.Change, "zzz")
 	}
 
 	constructor(root: string, opts?: CargoListOptions) {
@@ -75,7 +73,7 @@ export default class CargoList {
 			path,
 			id: uuid(),
 			type,
-			lastModified: ct(),
+			lastModified: 0,
 			lastAction: action,
 			lastActionBy: user,
 			actionId: uuid(),
@@ -198,10 +196,20 @@ export default class CargoList {
 
 	// TODO: conflicts at dst (res.after.path) need to be considered
 	private resolve(oldi: Item, newi: Item, pol: string): Resolution[] {
-		const [rl, _] = this.getResPol(oldi.type, pol)
-		const resarr = rl(oldi, newi)
+		const _oldi = this.dig(oldi) // TEST
+		const [rl, _] = this.getResPol(newi.type, pol)
+		const resarr = rl(_oldi, newi)
 		resarr.forEach(r => this.update(r))
 		return resarr
+	}
+
+	dig(item: Item): Item {
+		if (!item.tomb?.movedTo) return item
+		const newi = this.index
+			.get(item.tomb.movedTo)
+			?.find(i => i.hash === item.hash)
+		if (!newi) throw Error("Tomb leads to nowhere")
+		return this.dig(newi)
 	}
 
 	private applyADDFile(newitem: Item): Resolution[] {
