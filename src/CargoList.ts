@@ -15,7 +15,7 @@ import {
 import { LWWDirConfig, LWWFileConfig } from "./ResolvePolicies/defaultconfigs"
 import { makefpmap, makedpmap } from "./ResolvePolicies/ResolvePolicies"
 import { Resolution } from "./interfaces"
-import { ct, increment, uuid } from "./utils"
+import { increment, uuid } from "./utils"
 
 /**
  * Simple-LWW: all operations are ADD, REM, and CHG. Concurrent file movements will create duplicates across the system
@@ -27,7 +27,7 @@ import { ct, increment, uuid } from "./utils"
 export default class CargoList {
 	private index: Map<string, Item[]>
 	private indexpath: string
-	private tablefile: string = "indextable.json"
+	private tablefile = "indextable.json"
 	private rsfile: Map<string, RL>
 	private rsfilep: Map<string, RO>
 	private rsdir: Map<string, RL>
@@ -89,6 +89,7 @@ export default class CargoList {
 	 * Checking for (type, hash), and (lastAction, tomb)
 	 */
 	static validateItem(item: Item): boolean {
+		item
 		/*
 		if (item.lastAction === AT.Remove && !item.tomb) return false
 		if (item.lastAction !== AT.Remove && item.tomb) return false
@@ -157,7 +158,7 @@ export default class CargoList {
 
 	private update(res: Resolution): void {
 		switch (res.ro) {
-			case RO.LWW:
+			case RO.LWW: {
 				if (!res.new) return
 				const arr = this.index.get(res.after.path)
 				if (!arr) {
@@ -168,6 +169,7 @@ export default class CargoList {
 				if (i === -1) arr.push(res.after)
 				else arr[i] = res.after
 				return
+			}
 			case RO.DUP:
 				if (!res.before) throw Error()
 				if (res.new) {
@@ -197,7 +199,7 @@ export default class CargoList {
 	// TODO: conflicts at dst (res.after.path) need to be considered
 	private resolve(oldi: Item, newi: Item, pol: string): Resolution[] {
 		const _oldi = this.dig(oldi) // TEST
-		const [rl, _] = this.getResPol(newi.type, pol)
+		const [rl] = this.getResPol(newi.type, pol)
 		const resarr = rl(_oldi, newi)
 		resarr.forEach(r => this.update(r))
 		return resarr

@@ -13,7 +13,7 @@ export default class LocalProxy extends Proxy {
 		this.local = vessel
 	}
 
-	send(item: Item, rs?: NodeJS.ReadableStream) {
+	send(item: Item, rs?: NodeJS.ReadableStream): void {
 		this.local.applyIncoming(JSON.parse(JSON.stringify(item)), rs)
 	}
 

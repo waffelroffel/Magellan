@@ -68,17 +68,17 @@ export function concurrent(vc1: VectorClock, vc2: VectorClock): boolean {
 	return comp(vc1, vc2) === 0
 }
 
-export function identical(vc1: VectorClock, vc2: VectorClock) {
+export function identical(vc1: VectorClock, vc2: VectorClock): boolean {
 	const all = new Map<string, [number, number]>()
 	vc1.forEach(([k, v]) => {
 		const i = all.get(k)
-		if (!i) return all.set(k, [v, 0])
-		i[0] = v
+		if (!i) all.set(k, [v, 0])
+		else i[0] = v
 	})
 	vc2.forEach(([k, v]) => {
 		const i = all.get(k)
-		if (!i) return all.set(k, [0, v])
-		i[1] = v
+		if (!i) all.set(k, [0, v])
+		else i[1] = v
 	})
 	for (const [v1, v2] of all.values()) if (v1 !== v2) return false
 	return true
@@ -88,13 +88,13 @@ export function merge(vc1: VectorClock, vc2: VectorClock): VectorClock {
 	const all = new Map<string, [number, number]>()
 	vc1.forEach(([k, v]) => {
 		const i = all.get(k)
-		if (!i) return all.set(k, [v, -1])
-		i[0] = v
+		if (!i) all.set(k, [v, -1])
+		else i[0] = v
 	})
 	vc2.forEach(([k, v]) => {
 		const i = all.get(k)
-		if (!i) return all.set(k, [-1, v])
-		i[1] = v
+		if (!i) all.set(k, [-1, v])
+		else i[1] = v
 	})
 	return [...all.entries()].map(([k, vv]) => [k, Math.max(...vv)])
 }

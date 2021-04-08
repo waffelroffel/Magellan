@@ -243,7 +243,7 @@ export default class Vessel {
 		return value
 	}
 
-	logger(print?: boolean, ...msg: any[]): void {
+	logger(print?: boolean, ...msg: string[]): void {
 		if (print) console.log(cts(), this.user, ...msg)
 	}
 
@@ -386,14 +386,14 @@ export default class Vessel {
 		this.logger(this.loggerconf.update, "UPDATING")
 		const itemarr: [Item, Proxy][] = []
 		indices.forEach(([index, p]) =>
-			index.forEach(([_, v]) => v.forEach(i => itemarr.push([i, p])))
+			index.forEach(([, v]) => v.forEach(i => itemarr.push([i, p])))
 		)
 		const ressarr: [Resolution, Proxy][] = []
 		itemarr.map(([i, p]) =>
 			this.index.apply(i).forEach(res => ressarr.push([res, p]))
 		)
 
-		ressarr.forEach(([res, _]) => {
+		ressarr.forEach(([res]) => {
 			if (res.rename && !res.new) {
 				if (res.before) this.moveFile(res.before, res.after)
 			}
@@ -411,6 +411,8 @@ export default class Vessel {
 
 	// TODO
 	grantPrivs(nid: NID, priv: PERMISSION): boolean {
+		nid
+		priv
 		return false
 	}
 

@@ -38,7 +38,7 @@ export const TEST_INVITE: Invite = {
 	peers: [{ host: "localhost", port: 8080 }],
 }
 
-export const TEST_TEXT: string = "TOP SECRET DATA. DON'T SHARE!"
+export const TEST_TEXT = "TOP SECRET DATA. DON'T SHARE!"
 
 export const TEST_READSTREAM: NodeJS.ReadableStream = Readable.from(TEST_TEXT)
 
