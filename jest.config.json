@@ -5,6 +5,7 @@
 		"^.+\\.ts$": "ts-jest"
 	},
 	"collectCoverage": true,
+	"collectCoverageFrom": ["src/**/*.ts"],
 	"coverageDirectory": "cov",
 	"coverageThreshold": {}
 }

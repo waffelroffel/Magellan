@@ -15,7 +15,7 @@
 		"linebreak-style": ["error", "windows"],
 		"quotes": ["error", "double"],
 		"semi": ["error", "never"],
-		"eqeqeq": "error",
+		"eqeqeq": ["error", "always"],
 		"no-var": "error"
 	}
 }
