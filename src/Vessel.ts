@@ -280,7 +280,7 @@ export default class Vessel {
 		})
 	}
 
-	private applyInit(path: string, type: IT, action: AT): void {
+	private async applyInit(path: string, type: IT, action: AT): Promise<void> {
 		if (path === "") return
 		if (!this.permissions.write) return
 		if (!this.init) return
@@ -293,7 +293,7 @@ export default class Vessel {
 		const latest = this.index.getLatest(item.path)
 		if (latest && item.lastModified < latest.lastModified) return
 		if (type === IT.File) {
-			item.hash = this.store.computehash(item)
+			item.hash = await this.store.computehash(item)
 			if (latest && latest.hash !== item.hash) throw Error("hash unequal")
 			item.id = latest?.id ?? item.id
 			item.clock = latest?.clock ?? item.clock
@@ -304,7 +304,7 @@ export default class Vessel {
 		this.index.apply(item)
 	}
 
-	private applyLocal(path: string, type: IT, action: AT): void {
+	private async applyLocal(path: string, type: IT, action: AT): Promise<void> {
 		if (!this.permissions.write) return
 		if (this.skiplist.reduce(path)) return
 
@@ -317,7 +317,7 @@ export default class Vessel {
 			item.clock = latest ? increment(latest.clock, this.user) : item.clock
 		}
 		if (type === IT.File && (action === AT.Add || action === AT.Change))
-			item.hash = this.store.computehash(item)
+			item.hash = await this.store.computehash(item)
 
 		// Assuming no local conflicts
 		const resarr = this.index.apply(item)
@@ -338,7 +338,6 @@ export default class Vessel {
 		this.logger(this.loggerconf.remote, "<-", item.lastAction, item.path)
 
 		this.index.apply(item).forEach(res => {
-			//if (res.ro === RO.LWW && res.new) this.applyIO(res.after, rs)
 			if (res.new) this.applyIO(res.after, rs)
 			else if (res.rename && res.before) this.moveFile(res.before, res.after)
 			else throw Error()
@@ -349,11 +348,15 @@ export default class Vessel {
 	}
 
 	private moveFile(from: Item, to: Item): void {
-		this.skiplist.set(to.path, 1)
-		this.store.move(from, to)
+		// TODO: error handling on failed move
+		this.skiplist.add(to.path, 1)
+		this.store
+			.move(from, to)
+			.then(written => !written && this.skiplist.reduce(to.path))
 	}
 
 	private applyIO(item: Item, rs?: NodeJS.ReadableStream): void {
+		// TODO: error handling on failed io op
 		//item.onDevice = !item.tomb
 		this.skiplist.add(item.path, 1)
 		if (item.type === IT.Dir && !this.store.applyFolderIO(item))

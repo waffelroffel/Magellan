@@ -1,17 +1,8 @@
 import { createHash } from "crypto"
-import {
-	readFileSync,
-	existsSync,
-	rmdirSync,
-	mkdirSync,
-	rmSync,
-	createWriteStream,
-	createReadStream,
-	statSync,
-	writeFileSync,
-} from "fs"
+import { existsSync, createWriteStream, createReadStream, statSync } from "fs"
+import { mkdir, rm, rmdir } from "fs/promises"
 import { join } from "path"
-import { ActionType, ItemType } from "../enums"
+import { ActionType as AT, ItemType as IT } from "../enums"
 import { Item } from "../interfaces"
 import ABCStorage from "./ABCStorage"
 
@@ -21,6 +12,7 @@ import ABCStorage from "./ABCStorage"
  */
 export class LocalStorage extends ABCStorage {
 	root: string
+	canwrite: AT[] = [AT.Add, AT.Change, AT.RenameTo]
 
 	constructor(root: string) {
 		super()
@@ -35,55 +27,59 @@ export class LocalStorage extends ABCStorage {
 		return statSync(this.abspath(item)).mtimeMs
 	}
 
-	computehash(item: Item): string {
+	computehash(item: Item): Promise<string> {
 		const hash = createHash("sha256")
-		return hash.update(readFileSync(this.abspath(item))).digest("hex") // TODO: change to stream
-		/*return new Promise(resolve =>
-            createReadStream(path)
-                .on("end", () => resolve(hash.digest("hex")))
-                .pipe(hash)
-        )*/
+		const rs = createReadStream(this.abspath(item))
+		rs.pipe(hash)
+		return new Promise(res => rs.on("end", () => res(hash.digest("hex"))))
 	}
 
-	applyFolderIO(item: Item): boolean {
-		const abspath = this.abspath(item)
-		const exists = existsSync(abspath)
-		if (item.lastAction === ActionType.Remove && exists) {
-			rmdirSync(abspath, { recursive: true })
-			return true
-		} else if (item.lastAction === ActionType.Add && !exists) {
-			mkdirSync(abspath, { recursive: true })
-			return true
-		}
-		return false
+	private hashpipe(rs: NodeJS.ReadableStream): Promise<string> {
+		const hash = createHash("sha256")
+		rs.on("data", (data: string) => hash.write(data))
+		return new Promise(res => rs.on("end", () => res(hash.digest("hex"))))
 	}
 
-	applyFileIO(item: Item, rs?: NodeJS.ReadableStream): boolean {
+	async applyFolderIO(item: Item): Promise<boolean> {
 		const abspath = this.abspath(item)
 		const exists = existsSync(abspath)
-		if (item.lastAction === ActionType.Remove && exists) {
-			rmSync(abspath)
-			return true
-		} else if (
+		if (item.lastAction === AT.Remove && exists)
+			return rmdir(abspath, { recursive: true }).then(() => true)
+		else if (item.lastAction === AT.Add && !exists)
+			return mkdir(abspath, { recursive: true }).then(() => true)
+		else return false
+	}
+
+	async applyFileIO(item: Item, rs?: NodeJS.ReadableStream): Promise<boolean> {
+		const abspath = this.abspath(item)
+		const exists = existsSync(abspath)
+		if (item.lastAction === AT.Remove && exists)
+			return rm(abspath).then(() => true)
+		else if (this.canwrite.includes(item.lastAction) && rs) {
 			// TODO: split rename to renamedFrom and renamedTo
-			[ActionType.Add, ActionType.Change, ActionType.Rename].includes(
-				item.lastAction
-			) &&
-			rs
-		) {
+			this.hashpipe(rs).then(hash => {
+				if (item.hash !== hash) throw Error("hashes not equal")
+			})
 			rs.pipe(createWriteStream(abspath))
-			return true
-		}
-		return false
+			return new Promise(res => rs.on("end", () => res(true))) // TODO add reject when unfinished
+		} else return false
 	}
 
 	createRS(item: Item): NodeJS.ReadableStream | null {
-		if (item.type === ItemType.Dir || item.lastAction === ActionType.Remove)
-			return null
+		if (item.type === IT.Dir || item.lastAction === AT.Remove) return null
 		return createReadStream(this.abspath(item))
 	}
 
-	move(from: Item, to: Item): void {
-		writeFileSync(this.abspath(to), readFileSync(this.abspath(from))) // TODO: change to stream
+	async move(from: Item, to: Item): Promise<boolean> {
+		if (from.type !== to.type) throw Error()
+		else if (!this.canwrite.includes(from.lastAction)) return false
+		else if (!this.canwrite.includes(to.lastAction)) return false
+		else if (to.type === IT.File) {
+			const rs = createReadStream(this.abspath(from))
+			rs.pipe(createWriteStream(this.abspath(to)))
+			return new Promise(res => rs.on("end", () => res(true))) // TODO add reject when unfinished
+		} else if (to.type === IT.Dir)
+			return mkdir(this.abspath(to), { recursive: true }).then(() => true)
+		else throw Error()
 	}
 }

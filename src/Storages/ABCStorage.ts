@@ -7,9 +7,9 @@ import { Item } from "../interfaces"
 export default abstract class ABCStorage {
 	abstract abspath(item: Item): string
 	abstract lastmodified(item: Item): number
-	abstract computehash(item: Item): string
-	abstract applyFolderIO(item: Item): boolean
-	abstract applyFileIO(item: Item, rs?: NodeJS.ReadableStream): boolean
+	abstract computehash(item: Item): Promise<string>
+	abstract applyFolderIO(item: Item): Promise<boolean>
+	abstract applyFileIO(item: Item, rs?: NodeJS.ReadableStream): Promise<boolean>
 	abstract createRS(item: Item): NodeJS.ReadableStream | null
-	abstract move(from: Item, to: Item): void
+	abstract move(from: Item, to: Item): Promise<boolean>
 }
