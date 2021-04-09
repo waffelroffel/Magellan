@@ -28,8 +28,8 @@ test("initial sync", async () => {
 
 	await delay(500)
 
-	vessels[0].disconnect()
-	vessels[1].disconnect()
+	vessels[0].exit()
+	vessels[1].exit()
 
 	expect(assertIndices(vessels)).toBe(true)
 	expect(assertDirsAndFiles(roots)).toBe(true)
@@ -64,7 +64,7 @@ test("concurrent files", async () => {
 
 	await delay(1000)
 
-	vessels.forEach(v => v.disconnect())
+	vessels.forEach(v => v.exit())
 
 	expect(assertIndices(vessels)).toBe(true)
 	expect(assertDirsAndFiles(roots)).toBe(true)

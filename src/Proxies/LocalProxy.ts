@@ -1,11 +1,10 @@
-import { Medium, ResponseCode } from "../enums"
+import { ResponseCode } from "../enums"
 import { Item, IndexArray, Invite, PermissionGrant } from "../interfaces"
 import PermissionManager from "../Permissions"
 import Vessel from "../Vessel"
 import Proxy from "./Proxy"
 
 export default class LocalProxy extends Proxy {
-	type = Medium.local
 	private local: Vessel
 
 	constructor(vessel: Vessel) {

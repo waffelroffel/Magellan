@@ -51,9 +51,14 @@ export default class VesselServer {
 					case "connect":
 						this.vessel.connect()
 						return { msg: "vessel online", code: RC.DNE }
-					case "exit":
+					/*
+					case "disconnect":
 						this.vessel.disconnect()
 						return { msg: "vessel offline", code: RC.DNE }
+					case "exit":
+						this.vessel.exit()
+						return { msg: "vessel offline", code: RC.DNE }
+					*/
 					case "vanish":
 						this.vessel.vanish()
 						return { msg: "vessel vanished", code: RC.DNE }
@@ -107,17 +112,17 @@ export default class VesselServer {
 			}
 		)
 
-		// TODO: add schema for body
-		this.server.post<{ Params: Sid; Reply: VesselResponse }>(
-			"/item/data/:sid",
-			async req => {
-				const item = this.tempitems.get(req.params.sid)
-				if (!item) return { msg: "Sid not in queue", code: RC.ERR }
-				this.tempitems.delete(req.params.sid)
-				this.vessel.applyIncoming(item, req.raw) // TODO: req.body, return boolean ?
-				return { msg: "Transfer successful", code: RC.DNE }
-			}
-		)
+		this.server.post<{
+			Params: Sid
+			Body: NodeJS.ReadableStream
+			Reply: VesselResponse
+		}>("/item/data/:sid", async req => {
+			const item = this.tempitems.get(req.params.sid)
+			if (!item) return { msg: "Sid not in queue", code: RC.ERR }
+			this.tempitems.delete(req.params.sid)
+			this.vessel.applyIncoming(item, req.body)
+			return { msg: "Transfer successful", code: RC.DNE }
+		})
 
 		this.server.post<{ Body: NID; Reply: VesselResponse }>(
 			"/addpeer",

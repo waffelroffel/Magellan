@@ -1,4 +1,3 @@
-import { APIS } from "../src/Proxies/HTTPProxy"
 import { ResponseCode, PERMISSION } from "../src/enums"
 import VesselServer from "../src/VesselServer"
 import Vessel from "../src/Vessel"
@@ -20,6 +19,7 @@ import {
 	TEST_TEXT,
 	TEST_WRITESTREAM,
 } from "./config"
+import APIS from "../src/apis"
 jest.mock("../src/Vessel")
 
 let vessel: Vessel
@@ -67,7 +67,7 @@ describe("VesselServer CMDs", () => {
 	test("connect", async () => {
 		const res = await cmdfetch("connect")
 		expect(res.code).toBe(ResponseCode.DNE)
-	})
+	}) /*
 	test("exit", async () => {
 		const res = await cmdfetch("exit")
 		expect(res.code).toBe(ResponseCode.DNE)
@@ -75,7 +75,7 @@ describe("VesselServer CMDs", () => {
 	test("vanish", async () => {
 		const res = await cmdfetch("vanish")
 		expect(res.code).toBe(ResponseCode.DNE)
-	})
+	})*/
 	test("default", async () => {
 		const res = await cmdfetch("something")
 		expect(res.code).toBe(ResponseCode.ERR)

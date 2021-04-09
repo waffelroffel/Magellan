@@ -9,7 +9,8 @@
 	"scripts": {
 		"deps": "npm i",
 		"setup": "ts-node tests/setup_env.ts",
-		"test": "jest"
+		"test": "jest",
+		"test-nocov": "jest --coverage=false"
 	},
 	"dependencies": {
 		"chokidar": "^3.5.1",

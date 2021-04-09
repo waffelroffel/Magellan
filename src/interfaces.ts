@@ -160,6 +160,7 @@ export interface Api {
 }
 
 export interface VesselAPIs {
+	cmd: Api
 	senditemmeta: Api
 	senditemdata: Api
 	getitem: Api

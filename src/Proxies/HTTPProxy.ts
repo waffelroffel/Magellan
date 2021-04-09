@@ -1,5 +1,6 @@
 import fetch, { Response } from "node-fetch"
-import { ItemType as IT, Medium, ResponseCode } from "../enums"
+import APIS from "../apis"
+import { ItemType as IT, ResponseCode } from "../enums"
 import {
 	Item,
 	IndexArray,
@@ -9,51 +10,11 @@ import {
 	Sid,
 	Api,
 	FetchOptions,
-	VesselAPIs,
 	PermissionGrant,
 } from "../interfaces"
 import Proxy from "./Proxy"
 
-// TODO: put it somewhere else
-export const APIS: VesselAPIs = {
-	senditemmeta: {
-		end: "/item/meta",
-		method: "POST",
-		headers: { "Content-Type": "application/json" },
-	},
-	senditemdata: {
-		end: "/item/data/",
-		method: "POST",
-		headers: { "content-type": "app/binary" },
-	},
-	getitem: {
-		end: "/item",
-		method: "POST",
-		headers: { "Content-Type": "application/json" },
-	},
-	getindex: {
-		end: "/index",
-		method: "GET",
-	},
-	getinvite: {
-		end: "/invite",
-		method: "POST",
-		headers: { "Content-Type": "application/json" },
-	},
-	addpeer: {
-		end: "/addpeer",
-		method: "POST",
-		headers: { "Content-Type": "application/json" },
-	},
-	getPriv: {
-		end: "/permission",
-		method: "POST",
-		headers: { "Content-Type": "application/json" },
-	},
-}
-
 export default class HTTPProxy extends Proxy {
-	type = Medium.http
 	nid: NID
 	private protocol = "http://"
 	private base: string

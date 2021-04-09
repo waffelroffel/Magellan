@@ -1,4 +1,4 @@
-import { Medium, ResponseCode } from "../enums"
+import { ResponseCode } from "../enums"
 import {
 	Item,
 	NID,
@@ -10,7 +10,7 @@ import {
 import Vessel from "../Vessel"
 
 export default abstract class Proxy {
-	abstract type: Medium // TODO: unused
+	// abstract type: Medium
 
 	abstract send(item: Item, rs?: NodeJS.ReadableStream): void
 	abstract fetchItems(items: Item[]): ProxyRes<NodeJS.ReadableStream>[]

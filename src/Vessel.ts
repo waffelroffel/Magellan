@@ -102,8 +102,8 @@ export default class Vessel {
 		this.tablepath = join(root, this.TABLE_END)
 		this.settingspath = join(root, this.SETTINGS_END)
 		this.ignored = [this.TABLE_END, this.SETTINGS_END]
-		this._index = new CargoList(root, opts) // TODO: tablepath
-		this.nid = { host: "localhost", port: randint(8000, 8888) } // TODO:
+		this._index = new CargoList(this.tablepath, opts)
+		this.nid = { host: "localhost", port: randint(8000, 8888) }
 		this.loggerconf = checkLoggerConfig(opts?.loggerconf)
 		this.store = this.initStorage(root, "local")
 	}
@@ -173,14 +173,20 @@ export default class Vessel {
 		this.logger(this.loggerconf.vanish, "POFF! GONE.")
 	}
 
-	// TODO: split
-	disconnect(): void {
-		this.logger(this.loggerconf.offline, "OFFLINE")
+	disconnect(): Vessel {
 		this.online = false
-		this.watcher.close()
 		this.server.close()
+		this.logger(this.loggerconf.offline, "OFFLINE")
+		return this
+	}
+
+	exit(): Vessel {
+		if (this.online) this.disconnect()
+		this.watcher.close()
 		this.saveSettings()
 		this.index.save()
+		this.logger(this.loggerconf.offline, "EXITED")
+		return this
 	}
 
 	private async joinvia(nid: NID): Promise<void> {
@@ -208,8 +214,8 @@ export default class Vessel {
 		this.tablepath = settings.tablepath
 		this.settingspath = settings.settingspath
 		this.nid = settings.nid
-		settings.peers.forEach(peer =>
-			this.proxylist.addNode(Medium.http, { nid: peer.nid })
+		settings.peers.forEach(({ nid }) =>
+			this.proxylist.addNode(Medium.http, { nid })
 		)
 		this._sharetype = settings.sharetype
 		this.permissions = settings.privs
@@ -219,7 +225,6 @@ export default class Vessel {
 		return this
 	}
 
-	// TODO: async
 	saveSettings(): Vessel {
 		const settings: Settings = {
 			user: this.user,
@@ -333,10 +338,9 @@ export default class Vessel {
 	}
 
 	applyIncoming(item: Item, rs?: NodeJS.ReadableStream): void {
-		if (!this.permissions.read) return // TODO: ¯\_(ツ)_/¯
+		if (!this.permissions.read) return
 
 		this.logger(this.loggerconf.remote, "<-", item.lastAction, item.path)
-
 		this.index.apply(item).forEach(res => {
 			if (res.new) this.applyIO(res.after, rs)
 			else if (res.rename && res.before) this.moveFile(res.before, res.after)

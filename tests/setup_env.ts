@@ -6,7 +6,7 @@ export default function make_test_env(
 	users: string[],
 	depth: number[],
 	width: number[]
-) {
+): void {
 	rmdirSync(TESTROOT, { recursive: true })
 	mkdirSync(TESTROOT)
 

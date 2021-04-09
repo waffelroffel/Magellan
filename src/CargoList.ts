@@ -1,5 +1,4 @@
 import { existsSync, readFileSync, writeFileSync } from "fs"
-import { join } from "path"
 import {
 	ResolveOption as RO,
 	ItemType as IT,
@@ -27,7 +26,6 @@ import { increment, uuid } from "./utils"
 export default class CargoList {
 	private index: Map<string, Item[]>
 	private indexpath: string
-	private tablefile = "indextable.json"
 	private rsfile: Map<string, RL>
 	private rsfilep: Map<string, RO>
 	private rsdir: Map<string, RL>
@@ -37,9 +35,9 @@ export default class CargoList {
 		return CargoList.Item("", IT.File, AT.Change, "zzz")
 	}
 
-	constructor(root: string, opts?: CargoListOptions) {
+	constructor(indexpath: string, opts?: CargoListOptions) {
 		this.index = new Map()
-		this.indexpath = join(root, this.tablefile)
+		this.indexpath = indexpath
 		const frs = makefpmap(opts?.filerp ?? LWWFileConfig)
 		this.rsfile = frs[0]
 		this.rsfilep = frs[1]
@@ -112,7 +110,7 @@ export default class CargoList {
 			readFileSync(this.indexpath, { encoding: "utf8" })
 		)
 
-		oldindex.forEach(kv => kv[1].forEach(i => this.apply(i)))
+		oldindex.forEach(([, arr]) => arr.forEach(i => this.apply(i)))
 		this.save()
 	}
 
