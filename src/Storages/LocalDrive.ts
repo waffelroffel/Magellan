@@ -19,17 +19,17 @@ export class LocalStorage extends ABCStorage {
 		this.root = root
 	}
 
-	abspath(item: Item): string {
+	relpath(item: Item): string {
 		return join(this.root, item.path)
 	}
 
 	lastmodified(item: Item): number {
-		return statSync(this.abspath(item)).mtimeMs
+		return statSync(this.relpath(item)).mtimeMs
 	}
 
 	computehash(item: Item): Promise<string> {
 		const hash = createHash("sha256")
-		const rs = createReadStream(this.abspath(item))
+		const rs = createReadStream(this.relpath(item))
 		rs.pipe(hash)
 		return new Promise(res => rs.on("end", () => res(hash.digest("hex"))))
 	}
@@ -41,7 +41,7 @@ export class LocalStorage extends ABCStorage {
 	}
 
 	async applyFolderIO(item: Item): Promise<boolean> {
-		const abspath = this.abspath(item)
+		const abspath = this.relpath(item)
 		const exists = existsSync(abspath)
 		if (item.lastAction === AT.Remove && exists)
 			return rmdir(abspath, { recursive: true }).then(() => true)
@@ -51,12 +51,11 @@ export class LocalStorage extends ABCStorage {
 	}
 
 	async applyFileIO(item: Item, rs?: NodeJS.ReadableStream): Promise<boolean> {
-		const abspath = this.abspath(item)
+		const abspath = this.relpath(item)
 		const exists = existsSync(abspath)
 		if (item.lastAction === AT.Remove && exists)
 			return rm(abspath).then(() => true)
 		else if (this.canwrite.includes(item.lastAction) && rs) {
-			// TODO: split rename to renamedFrom and renamedTo
 			this.hashpipe(rs).then(hash => {
 				if (item.hash !== hash) throw Error("hashes not equal")
 			})
@@ -67,19 +66,19 @@ export class LocalStorage extends ABCStorage {
 
 	createRS(item: Item): NodeJS.ReadableStream | null {
 		if (item.type === IT.Dir || item.lastAction === AT.Remove) return null
-		return createReadStream(this.abspath(item))
+		return createReadStream(this.relpath(item))
 	}
 
 	async move(from: Item, to: Item): Promise<boolean> {
 		if (from.type !== to.type) throw Error()
-		else if (!this.canwrite.includes(from.lastAction)) return false
+		else if (this.canwrite.includes(from.lastAction)) return false
 		else if (!this.canwrite.includes(to.lastAction)) return false
 		else if (to.type === IT.File) {
-			const rs = createReadStream(this.abspath(from))
-			rs.pipe(createWriteStream(this.abspath(to)))
+			const rs = createReadStream(this.relpath(from))
+			rs.pipe(createWriteStream(this.relpath(to)))
 			return new Promise(res => rs.on("end", () => res(true))) // TODO add reject when unfinished
 		} else if (to.type === IT.Dir)
-			return mkdir(this.abspath(to), { recursive: true }).then(() => true)
+			return mkdir(this.relpath(to), { recursive: true }).then(() => true)
 		else throw Error()
 	}
 }

@@ -175,14 +175,14 @@ export default class CargoList {
 				if (res.new) {
 					if (res.rename) {
 						this.push(res.before)
-						res.before.lastAction = AT.Rename // TODO: apply new item instead of modifying old
-						res.after.lastAction = AT.Rename // TODO: apply new item instead of modifying old
+						res.before.lastAction = AT.RenameFrom // TODO: apply new item instead of modifying old
+						res.after.lastAction = AT.RenameTo // TODO: apply new item instead of modifying old
 						res.before.tomb = { type: TT.Renamed, movedTo: res.after.path }
 						this.push(res.after)
 					} else if (res.overwrite) this.push(res.after)
 				} else if (res.rename) {
-					res.before.lastAction = AT.Rename // TODO: apply new item instead of modifying old
-					res.after.lastAction = AT.Rename // TODO: apply new item instead of modifying old
+					res.before.lastAction = AT.RenameFrom // TODO: apply new item instead of modifying old
+					res.after.lastAction = AT.RenameTo // TODO: apply new item instead of modifying old
 					res.before.tomb = { type: TT.Renamed, movedTo: res.after.path }
 					this.push(res.after)
 				}
@@ -198,7 +198,7 @@ export default class CargoList {
 
 	// TODO: conflicts at dst (res.after.path) need to be considered
 	private resolve(oldi: Item, newi: Item, pol: string): Resolution[] {
-		const _oldi = this.dig(oldi) // TEST
+		const _oldi = oldi // this.dig(oldi) // TEST
 		const [rl] = this.getResPol(newi.type, pol)
 		const resarr = rl(_oldi, newi)
 		resarr.forEach(r => this.update(r))
@@ -223,10 +223,10 @@ export default class CargoList {
 				return this.resolve(olditem, newitem, "addrem")
 			case AT.Change:
 				return this.resolve(olditem, newitem, "addchg")
-			case AT.Rename:
+			case AT.RenameTo:
 				return this.resolve(olditem, newitem, "addchg")
 			default:
-				throw Error()
+				throw Error(olditem.lastAction)
 		}
 	}
 
@@ -239,10 +239,10 @@ export default class CargoList {
 				return this.resolve(olditem, newitem, "remrem")
 			case AT.Change:
 				return this.resolve(olditem, newitem, "remchg")
-			case AT.Rename:
+			case AT.RenameTo:
 				return this.resolve(olditem, newitem, "remchg")
 			default:
-				throw Error()
+				throw Error(olditem.lastAction)
 		}
 	}
 
@@ -255,10 +255,10 @@ export default class CargoList {
 				return this.resolve(olditem, newitem, "remchg")
 			case AT.Change:
 				return this.resolve(olditem, newitem, "chgchg")
-			case AT.Rename:
+			case AT.RenameTo:
 				return this.resolve(olditem, newitem, "chgchg")
 			default:
-				throw Error()
+				throw Error(olditem.lastAction)
 		}
 	}
 
@@ -272,7 +272,7 @@ export default class CargoList {
 			case AT.Change:
 				throw Error("CargoList.applyADDFolder: olditem.lastAction === CHG")
 			default:
-				throw Error()
+				throw Error(olditem.lastAction)
 		}
 	}
 
@@ -286,7 +286,7 @@ export default class CargoList {
 			case AT.Change:
 				throw Error("CargoList.applyREMOVEFolder: olditem.lastAction === CHG")
 			default:
-				throw Error()
+				throw Error(olditem.lastAction)
 		}
 	}
 }

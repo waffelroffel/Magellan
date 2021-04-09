@@ -45,7 +45,8 @@ export const enum ActionType {
 	Remove = "REM",
 	Move = "MOV",
 	Change = "CHG",
-	Rename = "RNM",
+	RenameFrom = "RNM_FROM",
+	RenameTo = "RNM_TO",
 }
 
 const ACTION_TYPES = [
@@ -53,7 +54,8 @@ const ACTION_TYPES = [
 	ActionType.Remove,
 	ActionType.Move,
 	ActionType.Change,
-	ActionType.Rename,
+	ActionType.RenameFrom,
+	ActionType.RenameTo,
 ]
 
 export const toActionType = (value: string): ActionType => {
@@ -69,7 +71,7 @@ export const enum Medium {
 	local,
 }
 
-// ---------------- RESOLVES ----------------
+// ---------------- SERVER ----------------
 export const enum ResponseCode {
 	DNE = "DNE",
 	NXT = "NXT",

@@ -5,7 +5,7 @@ import { Item } from "../interfaces"
  * TODO async
  */
 export default abstract class ABCStorage {
-	abstract abspath(item: Item): string
+	abstract relpath(item: Item): string
 	abstract lastmodified(item: Item): number
 	abstract computehash(item: Item): Promise<string>
 	abstract applyFolderIO(item: Item): Promise<boolean>
