@@ -51,14 +51,12 @@ export default class VesselServer {
 					case "connect":
 						this.vessel.connect()
 						return { msg: "vessel online", code: RC.DNE }
-					/*
 					case "disconnect":
 						this.vessel.disconnect()
 						return { msg: "vessel offline", code: RC.DNE }
 					case "exit":
 						this.vessel.exit()
 						return { msg: "vessel offline", code: RC.DNE }
-					*/
 					case "vanish":
 						this.vessel.vanish()
 						return { msg: "vessel vanished", code: RC.DNE }

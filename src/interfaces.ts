@@ -58,7 +58,7 @@ export interface Item {
 	hash?: string // Files only
 	//onDevice: boolean
 	tomb?: Tomb
-	parent?: { path: string; id: string } //TODO
+	parent: { path: string; id: string } | null //TODO
 	reachable?: boolean //TODO
 	clock: VectorClock
 }

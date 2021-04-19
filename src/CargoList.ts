@@ -30,6 +30,7 @@ export default class CargoList {
 	private rsfilep: Map<string, RO>
 	private rsdir: Map<string, RL>
 	private rsdirp: Map<string, RO>
+	private lastActionId = "0"
 
 	get DUMMY(): Item {
 		return CargoList.Item("", IT.File, AT.Change, "zzz")
@@ -44,6 +45,10 @@ export default class CargoList {
 		const drs = makedpmap(opts?.dirrp ?? LWWDirConfig)
 		this.rsdir = drs[0]
 		this.rsdirp = drs[1]
+	}
+
+	equal(actionid: string): boolean {
+		return this.lastActionId === actionid
 	}
 
 	testGet(): Map<string, Item[]> {
@@ -75,6 +80,7 @@ export default class CargoList {
 			lastAction: action,
 			lastActionBy: user,
 			actionId: uuid(),
+			parent: null,
 			//onDevice: false,
 			clock: [],
 		}
@@ -115,6 +121,7 @@ export default class CargoList {
 	}
 
 	apply(item: Item): Resolution[] {
+		this.lastActionId = item.actionId
 		if (item.path === this.indexpath) return []
 		if (item.type === IT.File) {
 			if (item.lastAction === AT.Add) return this.applyADDFile(item)
