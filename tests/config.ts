@@ -34,7 +34,7 @@ export const TEST_ITEM: Item = {
 	lastActionBy: "bob",
 	actionId: "f59d8076-36ce-4598-bf4e-6b891bf9124a",
 	clock: [["bob", 1]],
-	parent: null,
+	//parent: null,
 	hash: "eaa3abc116c050804eccffb16b0cf4b83a8776197b7f57ea5cc6bf50225cf9fd",
 }
 

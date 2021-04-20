@@ -6,7 +6,7 @@ import { Item } from "../interfaces"
  */
 export default abstract class ABCStorage {
 	abstract relpath(item: Item): string
-	abstract lastmodified(item: Item): number
+	abstract lastmodified(item: Item): number | null
 	abstract computehash(item: Item): Promise<string>
 	abstract applyFolderIO(item: Item): Promise<boolean>
 	abstract applyFileIO(item: Item, rs?: NodeJS.ReadableStream): Promise<boolean>

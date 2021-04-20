@@ -110,17 +110,16 @@ export default class VesselServer {
 			}
 		)
 
-		this.server.post<{
-			Params: Sid
-			Body: NodeJS.ReadableStream
-			Reply: VesselResponse
-		}>("/item/data/:sid", async req => {
-			const item = this.tempitems.get(req.params.sid)
-			if (!item) return { msg: "Sid not in queue", code: RC.ERR }
-			this.tempitems.delete(req.params.sid)
-			this.vessel.applyIncoming(item, req.body)
-			return { msg: "Transfer successful", code: RC.DNE }
-		})
+		this.server.post<{ Params: Sid; Reply: VesselResponse }>(
+			"/item/data/:sid",
+			async req => {
+				const item = this.tempitems.get(req.params.sid)
+				if (!item) return { msg: "Sid not in queue", code: RC.ERR }
+				this.tempitems.delete(req.params.sid)
+				this.vessel.applyIncoming(item, req.raw) // FIX: req.body undefined
+				return { msg: "Transfer successful", code: RC.DNE }
+			}
+		)
 
 		this.server.post<{ Body: NID; Reply: VesselResponse }>(
 			"/addpeer",

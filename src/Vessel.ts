@@ -8,6 +8,7 @@ import {
 	Medium,
 	SHARE_TYPE as ST,
 	PERMISSION,
+	TombType,
 } from "./enums"
 import {
 	Item,
@@ -21,7 +22,7 @@ import {
 	Resolution,
 } from "./interfaces"
 import ProxyInterface from "./ProxyInterface"
-import { cts, increment, randint } from "./utils"
+import { ct, cts, increment, randint } from "./utils"
 import Proxy from "./Proxies/Proxy"
 import VesselServer from "./VesselServer"
 import LocalProxy from "./Proxies/LocalProxy"
@@ -37,6 +38,7 @@ import { checkLoggerConfig } from "./defaultconf"
  * 	 the crdt can be treated as an state-based crdt during network init and rejoin
  *   and as an operation-based when online (need log for transmission gurantee) (or even just send whole state in updates)
  * - matching file hashes needs to be handled differently
+ * - periodically check cargolist version
  *
  */
 export default class Vessel {
@@ -47,6 +49,7 @@ export default class Vessel {
 	settingspath: string
 	SETTINGS_END = "settings.json"
 	skiplist = new SkipList()
+	potmovefiles = new Map<string, Item>()
 	init = true
 	ignored: string[]
 	nid: NID
@@ -292,7 +295,7 @@ export default class Vessel {
 		if (action !== AT.Add) return
 
 		const item = CargoList.Item(path, type, action, this.user)
-		item.lastModified = this.store.lastmodified(item)
+		item.lastModified = this.store.lastmodified(item) ?? ct()
 		//item.onDevice = true
 
 		const latest = this.index.getLatest(item.path)
@@ -314,15 +317,37 @@ export default class Vessel {
 		if (this.skiplist.reduce(path)) return
 
 		const item = CargoList.Item(path, type, action, this.user)
-		item.lastModified = this.store.lastmodified(item)
+		item.lastModified = this.store.lastmodified(item) ?? ct()
 		//item.onDevice = true
 		if (action === AT.Change || action === AT.Remove) {
 			const latest = this.index.getLatest(item.path)
 			item.id = latest?.id ?? item.id
 			item.clock = latest ? increment(latest.clock, this.user) : item.clock
+			if (action === AT.Remove) item.hash = latest?.hash
 		}
 		if (type === IT.File && (action === AT.Add || action === AT.Change))
 			item.hash = await this.store.computehash(item)
+
+		let toDelay = false
+		if (action === AT.Add) {
+			// TODO: add rename
+			const key = item.hash ?? item.path
+			const potmoved = this.potmovefiles.get(key)
+			if (potmoved) {
+				item.id = potmoved.id
+				item.clock = increment(potmoved.clock, this.user)
+				item.lastAction = AT.RenameTo
+				potmoved.lastAction = AT.RenameFrom
+				potmoved.tomb = { type: TombType.Renamed, movedTo: item.path }
+				this.potmovefiles.delete(key)
+				toDelay = true
+			}
+		} else if (action === AT.Remove) {
+			const key = item.hash ?? item.path
+			this.potmovefiles.set(key, item)
+			setTimeout(() => this.potmovefiles.delete(key), 5000)
+			toDelay = true
+		}
 
 		// Assuming no local conflicts
 		const resarr = this.index.apply(item)
@@ -330,7 +355,9 @@ export default class Vessel {
 		this.index.save()
 
 		this.logger(this.loggerconf.local, "->", action, item.path)
-		if (this.online) this.broadcast(item)
+		if (!this.online) return
+		if (toDelay) setTimeout(() => this.broadcast(item), 1000)
+		else this.broadcast(item)
 	}
 
 	private broadcast(item: Item): void {
@@ -342,7 +369,12 @@ export default class Vessel {
 
 		this.logger(this.loggerconf.remote, "<-", item.lastAction, item.path)
 		this.index.apply(item).forEach(res => {
-			if (res.new) this.applyIO(res.after, rs)
+			if (res.new && res.after.lastAction === AT.RenameFrom) {
+				if (!res.after.tomb?.movedTo) throw Error()
+				const movedTo = this.index.getLatest(res.after.tomb.movedTo)
+				if (!movedTo) throw Error()
+				this.moveFile(res.after, movedTo)
+			} else if (res.new) this.applyIO(res.after, rs)
 			else if (res.rename && res.before) this.moveFile(res.before, res.after)
 			else throw Error()
 		})
@@ -371,8 +403,8 @@ export default class Vessel {
 
 	getRS(item: Item): NodeJS.ReadableStream | null {
 		const latest = this.index.dig(item)
-		if (latest.tomb) throw Error()
 		if (latest?.id !== item.id) console.log(this.user, "Sending wrong file")
+		// if (latest.tomb) return null
 		const rs = this.store.createRS(latest)
 		if (rs) this.logger(this.loggerconf.send, "SENDING", latest.path)
 		return rs

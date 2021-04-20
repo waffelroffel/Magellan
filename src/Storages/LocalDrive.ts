@@ -23,7 +23,8 @@ export class LocalStorage extends ABCStorage {
 		return join(this.root, item.path)
 	}
 
-	lastmodified(item: Item): number {
+	lastmodified(item: Item): number | null {
+		if (!existsSync(this.relpath(item))) return null
 		return statSync(this.relpath(item)).mtimeMs
 	}
 
@@ -51,6 +52,7 @@ export class LocalStorage extends ABCStorage {
 	}
 
 	async applyFileIO(item: Item, rs?: NodeJS.ReadableStream): Promise<boolean> {
+		// write to .tmp then change ext
 		const abspath = this.relpath(item)
 		const exists = existsSync(abspath)
 		if (item.lastAction === AT.Remove && exists)

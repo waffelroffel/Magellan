@@ -80,7 +80,7 @@ export default class CargoList {
 			lastAction: action,
 			lastActionBy: user,
 			actionId: uuid(),
-			parent: null,
+			//parent: null,
 			//onDevice: false,
 			clock: [],
 		}
@@ -127,11 +127,14 @@ export default class CargoList {
 			if (item.lastAction === AT.Add) return this.applyADDFile(item)
 			if (item.lastAction === AT.Remove) return this.applyREMOVEFile(item)
 			if (item.lastAction === AT.Change) return this.applyCHANGEFile(item)
+			if (item.lastAction === AT.RenameFrom) return this.applyREMOVEFile(item)
+			if (item.lastAction === AT.RenameTo) return this.applyREMOVEFile(item)
+			else throw Error(`CargoList.apply: illegal action (${item.lastAction})`)
 		}
 		if (item.lastAction === AT.Add) return this.applyADDFolder(item)
 		if (item.lastAction === AT.Remove) return this.applyREMOVEFolder(item)
-		if (item.lastAction === AT.Change)
-			throw Error("CargoList.apply: illegal argument (folder CHG)")
+		else if (item.lastAction === AT.Change)
+			throw Error(`CargoList.apply: illegal action (${item.lastAction})`)
 		return []
 	}
 
@@ -212,9 +215,7 @@ export default class CargoList {
 
 	dig(item: Item): Item {
 		if (!item.tomb?.movedTo) return item
-		const newi = this.index
-			.get(item.tomb.movedTo)
-			?.find(i => i.hash === item.hash)
+		const newi = this.index.get(item.tomb.movedTo)?.find(i => i.id === item.id)
 		if (!newi) throw Error("Tomb leads to nowhere")
 		return this.dig(newi)
 	}
@@ -227,6 +228,8 @@ export default class CargoList {
 			case AT.Remove:
 				return this.resolve(olditem, newitem, "addrem")
 			case AT.Change:
+				return this.resolve(olditem, newitem, "addchg")
+			case AT.RenameFrom:
 				return this.resolve(olditem, newitem, "addchg")
 			case AT.RenameTo:
 				return this.resolve(olditem, newitem, "addchg")
@@ -244,8 +247,10 @@ export default class CargoList {
 				return this.resolve(olditem, newitem, "remrem")
 			case AT.Change:
 				return this.resolve(olditem, newitem, "remchg")
-			case AT.RenameTo:
+			case AT.RenameFrom:
 				return this.resolve(olditem, newitem, "remchg")
+			case AT.RenameTo:
+				return this.resolve(olditem, newitem, "addchg")
 			default:
 				throw Error(olditem.lastAction)
 		}
@@ -260,8 +265,10 @@ export default class CargoList {
 				return this.resolve(olditem, newitem, "remchg")
 			case AT.Change:
 				return this.resolve(olditem, newitem, "chgchg")
-			case AT.RenameTo:
+			case AT.RenameFrom:
 				return this.resolve(olditem, newitem, "chgchg")
+			case AT.RenameTo:
+				return this.resolve(olditem, newitem, "addchg")
 			default:
 				throw Error(olditem.lastAction)
 		}
