@@ -1,6 +1,6 @@
 import { createHash } from "crypto"
 import { existsSync, createWriteStream, createReadStream, statSync } from "fs"
-import { mkdir, rm, rmdir } from "fs/promises"
+import { mkdir, rename, rm, rmdir } from "fs/promises"
 import { join } from "path"
 import { ActionType as AT, ItemType as IT } from "../enums"
 import { Item } from "../interfaces"
@@ -12,7 +12,7 @@ import ABCStorage from "./ABCStorage"
  */
 export class LocalStorage extends ABCStorage {
 	root: string
-	canwrite: AT[] = [AT.Add, AT.Change, AT.RenameTo]
+	canwrite: AT[] = [AT.Add, AT.Change, AT.MovedTo]
 
 	constructor(root: string) {
 		super()
@@ -46,9 +46,9 @@ export class LocalStorage extends ABCStorage {
 		const exists = existsSync(abspath)
 		if (item.lastAction === AT.Remove && exists)
 			return rmdir(abspath, { recursive: true }).then(() => true)
-		else if (item.lastAction === AT.Add && !exists)
+		if (item.lastAction === AT.Add && !exists)
 			return mkdir(abspath, { recursive: true }).then(() => true)
-		else return false
+		return false
 	}
 
 	async applyFileIO(item: Item, rs?: NodeJS.ReadableStream): Promise<boolean> {
@@ -57,30 +57,27 @@ export class LocalStorage extends ABCStorage {
 		const exists = existsSync(abspath)
 		if (item.lastAction === AT.Remove && exists)
 			return rm(abspath).then(() => true)
-		else if (this.canwrite.includes(item.lastAction) && rs) {
+		if (this.canwrite.includes(item.lastAction) && rs) {
 			this.hashpipe(rs).then(hash => {
 				if (item.hash !== hash) throw Error("hashes not equal")
 			})
 			rs.pipe(createWriteStream(abspath))
-			return new Promise(res => rs.on("end", () => res(true))) // TODO add reject when unfinished
-		} else return false
+			return new Promise(res => rs.on("end", () => res(true)))
+		}
+		return false
 	}
 
 	createRS(item: Item): NodeJS.ReadableStream | null {
 		if (item.type === IT.Dir || item.lastAction === AT.Remove) return null
+		if (!existsSync(this.relpath(item)))
+			throw Error(`${this.relpath(item)} doesn't exist`)
 		return createReadStream(this.relpath(item))
 	}
 
 	async move(from: Item, to: Item): Promise<boolean> {
 		if (from.type !== to.type) throw Error()
-		else if (this.canwrite.includes(from.lastAction)) return false
-		else if (!this.canwrite.includes(to.lastAction)) return false
-		else if (to.type === IT.File) {
-			const rs = createReadStream(this.relpath(from))
-			rs.pipe(createWriteStream(this.relpath(to)))
-			return new Promise(res => rs.on("end", () => res(true))) // TODO add reject when unfinished
-		} else if (to.type === IT.Dir)
-			return mkdir(this.relpath(to), { recursive: true }).then(() => true)
-		else throw Error()
+		if (this.canwrite.includes(from.lastAction)) return false
+		if (!this.canwrite.includes(to.lastAction)) return false
+		return rename(this.relpath(from), this.relpath(to)).then(() => true)
 	}
 }

@@ -44,7 +44,7 @@ export default class HTTPProxy extends Proxy {
 		if (!res) return
 		const resobj: VesselResponse<Sid> = await res.json()
 		if (resobj.code === ResponseCode.DNE) return
-		if (!resobj.data?.sid) throw Error("HTTPProxy.send: no Sid received") // TODO: error logic
+		if (!resobj.data?.sid) throw Error("HTTPProxy.send: no Sid received")
 		this.fetch(APIS.senditemdata, { params: resobj.data.sid, body: rs })
 	}
 
@@ -64,7 +64,7 @@ export default class HTTPProxy extends Proxy {
 		if (!res) return null
 		const resobj: VesselResponse<IndexArray> = await res.json()
 		if (!resobj?.data)
-			throw Error("HTTPProxy.fetchIndex: no IndexArray received") // TODO: error logic
+			throw Error("HTTPProxy.fetchIndex: no IndexArray received")
 		return resobj.data
 	}
 
@@ -72,7 +72,7 @@ export default class HTTPProxy extends Proxy {
 		const res = await this.fetch(APIS.getinvite, { body: JSON.stringify(src) })
 		if (!res) return null
 		const resobj: VesselResponse<Invite> = await res.json()
-		if (!resobj.data) throw Error("HTTPProxy.getinvite: no Invite received") // TODO: error logic
+		if (!resobj.data) throw Error("HTTPProxy.getinvite: no Invite received")
 		return resobj.data
 	}
 
@@ -80,7 +80,7 @@ export default class HTTPProxy extends Proxy {
 		const res = await this.fetch(APIS.addpeer, { body: JSON.stringify(src) })
 		if (!res) throw Error("no res")
 		const resobj: VesselResponse = await res.json()
-		if (resobj.code !== ResponseCode.DNE) throw Error(resobj.msg) // TODO: error logic
+		if (resobj.code !== ResponseCode.DNE) throw Error(resobj.msg)
 		return resobj.code
 	}
 
@@ -88,9 +88,7 @@ export default class HTTPProxy extends Proxy {
 		const res = await this.fetch(APIS.getPriv, { body: JSON.stringify(src) })
 		if (!res) return null
 		const resobj: VesselResponse<PermissionGrant> = await res.json()
-		if (resobj.code === ResponseCode.ERR)
-			throw Error("HTTPProxy.getPriv: error code") // TODO: error logic
-		if (!resobj.data) throw Error("HTTPProxy.getPriv: no grant received") // TODO: error logic
+		if (!resobj.data) throw Error("HTTPProxy.getPriv: no grant received")
 		return resobj.data
 	}
 }

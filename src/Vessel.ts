@@ -67,7 +67,7 @@ export default class Vessel {
 	private apply = this.applyInit
 
 	private _watcher?: FSWatcher
-	private _server?: VesselServer // TODO: move inside contructor?
+	private _server?: VesselServer
 	private _sharetype?: ST
 	private _setupready?: Promise<void>
 
@@ -269,21 +269,30 @@ export default class Vessel {
 				ignored: this.ignored,
 				ignoreInitial: false, // TODO
 				awaitWriteFinish: { stabilityThreshold: 1000 },
+				ignorePermissionErrors: true,
 			})
 				.on("add", (path: string) => this.apply(path, IT.File, AT.Add))
 				.on("change", (path: string) => this.apply(path, IT.File, AT.Change))
 				.on("unlink", (path: string) => this.apply(path, IT.File, AT.Remove))
 				.on("addDir", (path: string) => this.apply(path, IT.Dir, AT.Add))
-				.on("unlinkDir", (path: string) => this.apply(path, IT.Dir, AT.Remove)) // FIXME: error when deleting folder with folders due to order of deletion parent->child
+				.on("unlinkDir", (path: string) => this.apply(path, IT.Dir, AT.Remove))
 				.on("error", e =>
 					this.logger(this.loggerconf.error, "ERROR", e.message)
-				) // BUG: when empty folder gets deleted throws error TODO: add {ignorePermissionErrors: true} to chokidar
+				) // BUG: when empty folder gets deleted throws error
 				.on("ready", () => {
 					this.init = false
 					this.apply = this.applyLocal
 					this.index.save()
 					this.logger(this.loggerconf.ready, "PLVS VLTRA!")
 					resolve()
+					/* // FIX: needs delay in case for ongoing apply(s) to finish 
+					setTimeout(() => {
+						this.init = false
+						this.apply = this.applyLocal
+						this.index.save()
+						this.logger(this.loggerconf.ready, "PLVS VLTRA!")
+						resolve()
+					}, 2000)*/
 				})
 		})
 	}
@@ -328,26 +337,7 @@ export default class Vessel {
 		if (type === IT.File && (action === AT.Add || action === AT.Change))
 			item.hash = await this.store.computehash(item)
 
-		let toDelay = false
-		if (action === AT.Add) {
-			// TODO: add rename
-			const key = item.hash ?? item.path
-			const potmoved = this.potmovefiles.get(key)
-			if (potmoved) {
-				item.id = potmoved.id
-				item.clock = increment(potmoved.clock, this.user)
-				item.lastAction = AT.RenameTo
-				potmoved.lastAction = AT.RenameFrom
-				potmoved.tomb = { type: TombType.Renamed, movedTo: item.path }
-				this.potmovefiles.delete(key)
-				toDelay = true
-			}
-		} else if (action === AT.Remove) {
-			const key = item.hash ?? item.path
-			this.potmovefiles.set(key, item)
-			setTimeout(() => this.potmovefiles.delete(key), 5000)
-			toDelay = true
-		}
+		const toDelay = this.checkForMoveOrRename(item)
 
 		// Assuming no local conflicts
 		const resarr = this.index.apply(item)
@@ -356,8 +346,32 @@ export default class Vessel {
 
 		this.logger(this.loggerconf.local, "->", action, item.path)
 		if (!this.online) return
-		if (toDelay) setTimeout(() => this.broadcast(item), 1000)
+		if (toDelay) setTimeout(() => this.broadcast(item), 2000)
 		else this.broadcast(item)
+	}
+
+	private checkForMoveOrRename(item: Item): boolean {
+		const key = item.hash ?? item.path
+		switch (item.lastAction) {
+			case AT.Add: {
+				// TODO: add rename
+				const potmoved = this.potmovefiles.get(key)
+				if (!potmoved) return false
+				item.id = potmoved.id
+				item.clock = increment(potmoved.clock, this.user)
+				item.lastAction = AT.MovedTo
+				potmoved.lastAction = AT.MovedFrom
+				potmoved.tomb = { type: TombType.Moved, movedTo: item.path }
+				this.potmovefiles.delete(key)
+				return true
+			}
+			case AT.Remove:
+				this.potmovefiles.set(key, item)
+				setTimeout(() => this.potmovefiles.delete(key), 5000)
+				return true
+			default:
+				return false
+		}
 	}
 
 	private broadcast(item: Item): void {
@@ -369,11 +383,9 @@ export default class Vessel {
 
 		this.logger(this.loggerconf.remote, "<-", item.lastAction, item.path)
 		this.index.apply(item).forEach(res => {
-			if (res.new && res.after.lastAction === AT.RenameFrom) {
+			if (res.new && res.after.lastAction === AT.MovedFrom) {
 				if (!res.after.tomb?.movedTo) throw Error()
-				const movedTo = this.index.getLatest(res.after.tomb.movedTo)
-				if (!movedTo) throw Error()
-				this.moveFile(res.after, movedTo)
+				this.moveFile(res.after, this.index.dig(res.after))
 			} else if (res.new) this.applyIO(res.after, rs)
 			else if (res.rename && res.before) this.moveFile(res.before, res.after)
 			else throw Error()
@@ -384,17 +396,16 @@ export default class Vessel {
 	}
 
 	private moveFile(from: Item, to: Item): void {
-		// TODO: error handling on failed move
-		this.skiplist.add(to.path, 1)
-		this.store
-			.move(from, to)
-			.then(written => !written && this.skiplist.reduce(to.path))
+		this.skiplist.add(from.path, 1).add(to.path, 1)
+		this.store.move(from, to).then(written => {
+			if (written) return
+			this.skiplist.reduce(from.path)
+			this.skiplist.reduce(to.path)
+		})
 	}
 
 	private applyIO(item: Item, rs?: NodeJS.ReadableStream): void {
-		// TODO: error handling on failed io op
-		//item.onDevice = !item.tomb
-		this.skiplist.add(item.path, 1)
+		this.skiplist.add(item.path, 2) // BUG: need to test
 		if (item.type === IT.Dir && !this.store.applyFolderIO(item))
 			this.skiplist.reduce(item.path)
 		else if (item.type === IT.File && !this.store.applyFileIO(item, rs))
@@ -404,7 +415,6 @@ export default class Vessel {
 	getRS(item: Item): NodeJS.ReadableStream | null {
 		const latest = this.index.dig(item)
 		if (latest?.id !== item.id) console.log(this.user, "Sending wrong file")
-		// if (latest.tomb) return null
 		const rs = this.store.createRS(latest)
 		if (rs) this.logger(this.loggerconf.send, "SENDING", latest.path)
 		return rs

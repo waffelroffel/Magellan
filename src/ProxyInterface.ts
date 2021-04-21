@@ -35,7 +35,6 @@ export default class ProxyInterface extends Array<Proxy> {
 		this.forEach(p => p.send(item, rs))
 	}
 
-	// TODO: what other data aside NID
 	serialize(): { nid: NID }[] {
 		return this.filter(p => p instanceof HTTPProxy).map(p => {
 			return { nid: (p as HTTPProxy).nid }

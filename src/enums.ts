@@ -28,11 +28,11 @@ export const toItemType = (value: string): ItemType => {
 
 export const enum TombType {
 	Moved = "M",
-	Renamed = "R",
+	//Renamed = "R",
 	Deleted = "D",
 }
 
-const TOMB_TYPES = [TombType.Moved, TombType.Renamed, TombType.Deleted]
+const TOMB_TYPES = [TombType.Moved, TombType.Deleted]
 
 export const toTombTypes = (value: string): TombType => {
 	const tomb = TOMB_TYPES.find(tt => tt === value)
@@ -45,8 +45,8 @@ export const enum ActionType {
 	Remove = "REM",
 	Move = "MOV",
 	Change = "CHG",
-	RenameFrom = "RNM_FROM",
-	RenameTo = "RNM_TO",
+	MovedFrom = "RNM_FROM",
+	MovedTo = "RNM_TO",
 }
 
 const ACTION_TYPES = [
@@ -54,8 +54,8 @@ const ACTION_TYPES = [
 	ActionType.Remove,
 	ActionType.Move,
 	ActionType.Change,
-	ActionType.RenameFrom,
-	ActionType.RenameTo,
+	ActionType.MovedFrom,
+	ActionType.MovedTo,
 ]
 
 export const toActionType = (value: string): ActionType => {
