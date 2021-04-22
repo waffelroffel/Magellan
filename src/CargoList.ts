@@ -89,23 +89,11 @@ export default class CargoList {
 		return item
 	}
 
-	/**
-	 * Checking for (type, hash), and (lastAction, tomb)
-	 */
 	static validateItem(item: Item): boolean {
-		item
-		/*
 		if (item.lastAction === AT.Remove && !item.tomb) return false
-		if (item.lastAction !== AT.Remove && item.tomb) return false
+		if (item.lastAction === AT.MovedFrom && !item.tomb?.movedTo) return false
 		if (item.type === IT.Dir && item.hash) return false
-		if (item.type === IT.File) {
-			if (item.lastAction === AT.Remove && item.hash) return false
-			if (item.lastAction !== AT.Remove && !item.hash) return false
-		}
 		if (item.clock.length === 0) return false
-		// TODO: add checks for tomb.type and tomb.movedTo for different ActionType
-		// TODO: add checks all enum values (isEnum(...))
-		*/
 		return true
 	}
 
@@ -151,11 +139,6 @@ export default class CargoList {
 
 	findById(item: Item): Item | null {
 		return this.index.get(item.path)?.find(i => i.id === item.id) ?? null
-	}
-
-	// TODO: unused
-	findbyhash(path: string, hash: string): Item | null {
-		return this.index.get(path)?.find(n => n.hash === hash) ?? null
 	}
 
 	private push(item: Item): void {
@@ -204,7 +187,6 @@ export default class CargoList {
 		return [rl, ro]
 	}
 
-	// TODO: conflicts at dst (res.after.path) need to be considered
 	private resolve(oldi: Item, newi: Item, pol: string): Resolution[] {
 		const _oldi = oldi // this.dig(oldi) // TEST
 		const [rl] = this.getResPol(newi.type, pol)

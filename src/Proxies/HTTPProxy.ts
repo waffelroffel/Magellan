@@ -84,11 +84,21 @@ export default class HTTPProxy extends Proxy {
 		return resobj.code
 	}
 
-	async getPriv(src: NID): Promise<PermissionGrant | null> {
-		const res = await this.fetch(APIS.getPriv, { body: JSON.stringify(src) })
-		if (!res) return null
-		const resobj: VesselResponse<PermissionGrant> = await res.json()
-		if (!resobj.data) throw Error("HTTPProxy.getPriv: no grant received")
-		return resobj.data
+	async reqPerm(src: NID): Promise<void> {
+		const res = await this.fetch(APIS.reqPerm, { body: JSON.stringify(src) })
+		if (!res) return
+		const resobj: VesselResponse = await res.json()
+		if (resobj.code !== ResponseCode.DNE)
+			throw Error("HTTPProxy.reqPerm: permission request not received")
+	}
+
+	async grantPerm(grant: PermissionGrant): Promise<void> {
+		const res = await this.fetch(APIS.grantPerm, {
+			body: JSON.stringify(grant),
+		})
+		if (!res) return
+		const resobj: VesselResponse = await res.json()
+		if (resobj.code !== ResponseCode.DNE)
+			throw Error("HTTPProxy.grantPerm: permission grant not received")
 	}
 }

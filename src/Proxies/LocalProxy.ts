@@ -37,7 +37,11 @@ export default class LocalProxy extends Proxy {
 		return ResponseCode.DNE
 	}
 
-	getPriv(): PermissionGrant {
-		throw Error("LocalProxy.getPriv: not implemented")
+	reqPerm(): PermissionGrant {
+		throw Error("LocalProxy.reqPerm: not implemented")
+	}
+
+	grantPerm(): PermissionGrant {
+		throw Error("LocalProxy.grantPerm: not implemented")
 	}
 }

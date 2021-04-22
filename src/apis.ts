@@ -34,8 +34,13 @@ const APIS: VesselAPIs = {
 		method: "POST",
 		headers: { "Content-Type": "application/json" },
 	},
-	getPriv: {
-		end: "/permission",
+	reqPerm: {
+		end: "/reqpermission",
+		method: "POST",
+		headers: { "Content-Type": "application/json" },
+	},
+	grantPerm: {
+		end: "/grantpermission",
 		method: "POST",
 		headers: { "Content-Type": "application/json" },
 	},

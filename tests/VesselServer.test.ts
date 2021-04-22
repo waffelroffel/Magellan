@@ -1,4 +1,4 @@
-import { ResponseCode, PERMISSION } from "../src/enums"
+import { ResponseCode } from "../src/enums"
 import VesselServer from "../src/VesselServer"
 import Vessel from "../src/Vessel"
 import fetch from "node-fetch"
@@ -7,7 +7,6 @@ import {
 	FetchOptions,
 	IndexArray,
 	Invite,
-	PermissionGrant,
 	Sid,
 	VesselResponse,
 } from "../src/interfaces"
@@ -46,7 +45,7 @@ function mockVesselFns(vessel: Vessel): void {
 	vessel.invite = () => TEST_INVITE
 	vessel.getRS = () => TEST_READSTREAM
 	vessel.addPeer = () => true
-	vessel.grantPrivs = () => true
+	vessel.requestPerm = () => true
 }
 
 beforeAll(async () => {
@@ -91,7 +90,6 @@ describe("VesselServer APIs", () => {
 		expect(res.body.setEncoding("utf8").read()).toBe(TEST_TEXT)
 	})
 	test("item/(meta|data)", async () => {
-		// TODO: test for ActionType.Remove
 		const res1 = await apifetch<Sid>(APIS.senditemmeta, {
 			body: JSON.stringify(TEST_ITEM),
 		})
@@ -112,13 +110,6 @@ describe("VesselServer APIs", () => {
 		})
 		expect(res.code).toBe(ResponseCode.DNE)
 		expect(res.msg).toBe("Peer already registred")
-	})
-	test("permission", async () => {
-		const res = await apifetch<PermissionGrant>(APIS.getPriv, {
-			params: `?get=${PERMISSION.WRITE}`,
-			body: JSON.stringify({ host: "localhost", port: 8111 }),
-		})
-		expect(res.code).toBe(ResponseCode.DNE)
 	})
 })
 

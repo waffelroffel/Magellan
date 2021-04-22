@@ -20,6 +20,7 @@ import {
 	VesselOptions,
 	IndexArray,
 	Resolution,
+	PermissionGrant,
 } from "./interfaces"
 import ProxyInterface from "./ProxyInterface"
 import { ct, cts, increment, randint } from "./utils"
@@ -31,6 +32,7 @@ import ABCStorage from "./Storages/ABCStorage"
 import { LocalStorage } from "./Storages/LocalDrive"
 import SkipList from "./SkipList"
 import { checkLoggerConfig } from "./defaultconf"
+import HTTPProxy from "./Proxies/HTTPProxy"
 
 /**
  * TODO
@@ -62,6 +64,7 @@ export default class Vessel {
 	private _proxylist = new ProxyInterface()
 	private admin = false
 	private permissions: Permissions = { write: false, read: false }
+	private permreqlist: { nid: NID; perm: PERMISSION }[] = []
 	private permmanager?: PermissionManager
 	private afterOnline?: () => void
 	private apply = this.applyInit
@@ -337,7 +340,7 @@ export default class Vessel {
 		if (type === IT.File && (action === AT.Add || action === AT.Change))
 			item.hash = await this.store.computehash(item)
 
-		const toDelay = this.checkForMoveOrRename(item)
+		const toDelay = this.checkForMoved(item)
 
 		// Assuming no local conflicts
 		const resarr = this.index.apply(item)
@@ -350,11 +353,10 @@ export default class Vessel {
 		else this.broadcast(item)
 	}
 
-	private checkForMoveOrRename(item: Item): boolean {
+	private checkForMoved(item: Item): boolean {
 		const key = item.hash ?? item.path
 		switch (item.lastAction) {
 			case AT.Add: {
-				// TODO: add rename
 				const potmoved = this.potmovefiles.get(key)
 				if (!potmoved) return false
 				item.id = potmoved.id
@@ -458,11 +460,29 @@ export default class Vessel {
 		this.index.save()
 	}
 
-	// TODO
-	grantPrivs(nid: NID, priv: PERMISSION): boolean {
-		nid
-		priv
-		return false
+	requestPerm(nid: NID, perm: PERMISSION): void {
+		this.permreqlist.push({ nid, perm })
+	}
+
+	grantPerm(i: number): void {
+		const grantreq = this.permreqlist.splice(i)[0]
+		const p = this.proxylist
+			.filter(p => p instanceof HTTPProxy)
+			.find(p => (p as HTTPProxy).nid === grantreq.nid)
+		if (!p) throw Error("Vessel.grantPerm: proxy not found")
+		p.grantPerm({ priv: grantreq.perm, grant: true })
+	}
+
+	setPerm(pg: PermissionGrant): void {
+		if (!pg.grant) return
+		switch (pg.priv) {
+			case PERMISSION.READ:
+				this.permissions.read = pg.grant
+				return
+			case PERMISSION.WRITE:
+				this.permissions.write = pg.grant
+				return
+		}
 	}
 
 	invite(nid: NID): Invite | null {

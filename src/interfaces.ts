@@ -167,7 +167,8 @@ export interface VesselAPIs {
 	getindex: Api
 	getinvite: Api
 	addpeer: Api
-	getPriv: Api
+	reqPerm: Api
+	grantPerm: Api
 }
 
 export interface PermissionGrant {

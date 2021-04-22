@@ -43,16 +43,14 @@ export const toTombTypes = (value: string): TombType => {
 export const enum ActionType {
 	Add = "ADD",
 	Remove = "REM",
-	Move = "MOV",
 	Change = "CHG",
-	MovedFrom = "RNM_FROM",
-	MovedTo = "RNM_TO",
+	MovedFrom = "MOV_FROM",
+	MovedTo = "MOV_TO",
 }
 
 const ACTION_TYPES = [
 	ActionType.Add,
 	ActionType.Remove,
-	ActionType.Move,
 	ActionType.Change,
 	ActionType.MovedFrom,
 	ActionType.MovedTo,

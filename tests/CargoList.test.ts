@@ -1,7 +1,7 @@
 import { ActionType as AT, ItemType as IT } from "../src/enums"
 import CargoList from "../src/CargoList"
 import { TESTROOT } from "./config"
-// add snapshots
+
 test("CargoList test lww", () => {
 	const cl = new CargoList(TESTROOT)
 	const i1 = CargoList.Item("file1.txt", IT.File, AT.Add, "alice")

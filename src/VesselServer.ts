@@ -135,15 +135,18 @@ export default class VesselServer {
 			Querystring: { get: PERMISSION }
 			Body: NID
 			Reply: VesselResponse<PermissionGrant>
-		}>("/permission", async req => {
+		}>("/reqpermission", async req => {
 			if (!this.vessel.isAdmin) return { msg: "Peer not admin", code: RC.ERR }
-			const privreq = req.query.get
-			const grant = this.vessel.grantPrivs(req.body, privreq)
-			return {
-				msg: `${privreq} permission granted`,
-				code: RC.DNE,
-				data: { priv: privreq, grant },
-			}
+			this.vessel.requestPerm(req.body, req.query.get)
+			return { msg: `${req.query.get} permission under review`, code: RC.DNE }
+		})
+
+		this.server.post<{
+			Body: PermissionGrant
+			Reply: VesselResponse<PermissionGrant>
+		}>("/grantpermission", async req => {
+			this.vessel.setPerm(req.body)
+			return { msg: `${req.body.priv} permission received`, code: RC.DNE }
 		})
 	}
 }
