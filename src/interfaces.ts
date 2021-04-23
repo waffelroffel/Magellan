@@ -56,7 +56,6 @@ export interface Item {
 	lastActionBy: string
 	actionId: string
 	hash?: string // Files only
-	//onDevice: boolean
 	tomb?: Tomb
 	//parent: { path: string; id: string } | null //TODO
 	//reachable?: boolean //TODO

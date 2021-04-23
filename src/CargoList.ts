@@ -81,7 +81,6 @@ export default class CargoList {
 			lastActionBy: user,
 			actionId: uuid(),
 			//parent: null,
-			//onDevice: false,
 			clock: [],
 		}
 		increment(item.clock, user)

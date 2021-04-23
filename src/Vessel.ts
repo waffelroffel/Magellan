@@ -60,6 +60,7 @@ export default class Vessel {
 	synced = false
 	store: ABCStorage
 
+	private onlocal = new Set<string>()
 	private _index: CargoList
 	private _proxylist = new ProxyInterface()
 	private admin = false
@@ -308,7 +309,7 @@ export default class Vessel {
 
 		const item = CargoList.Item(path, type, action, this.user)
 		item.lastModified = this.store.lastmodified(item) ?? ct()
-		//item.onDevice = true
+		this.onlocal.add(item.id)
 
 		const latest = this.index.getLatest(item.path)
 		if (latest && item.lastModified < latest.lastModified) return
@@ -330,16 +331,12 @@ export default class Vessel {
 
 		const item = CargoList.Item(path, type, action, this.user)
 		item.lastModified = this.store.lastmodified(item) ?? ct()
-		//item.onDevice = true
-		if (action === AT.Change || action === AT.Remove) {
-			const latest = this.index.getLatest(item.path)
-			item.id = latest?.id ?? item.id
-			item.clock = latest ? increment(latest.clock, this.user) : item.clock
-			if (action === AT.Remove) item.hash = latest?.hash
-		}
-		if (type === IT.File && (action === AT.Add || action === AT.Change))
+
+		if (type === IT.File && action !== AT.Remove)
 			item.hash = await this.store.computehash(item)
 
+		this.checkIfExisting(item)
+		this.checkIfLocal(item)
 		const toDelay = this.checkForMoved(item)
 
 		// Assuming no local conflicts
@@ -351,6 +348,36 @@ export default class Vessel {
 		if (!this.online) return
 		if (toDelay) setTimeout(() => this.broadcast(item), 2000)
 		else this.broadcast(item)
+	}
+
+	private checkIfExisting(item: Item): void {
+		if (item.lastAction === AT.Add) return
+		const latest = this.index.getLatest(item.path)
+		if (!latest) throw Error()
+		item.id = latest.id
+		item.clock = increment(latest.clock, this.user)
+		if (item.type === IT.File && item.lastAction === AT.Remove)
+			item.hash = latest.hash
+	}
+
+	private checkIfLocal(item: Item): void {
+		switch (item.lastAction) {
+			case AT.Add:
+				this.onlocal.add(item.id)
+				return
+			case AT.Change:
+				this.onlocal.add(item.id)
+				return
+			case AT.Remove:
+				this.onlocal.delete(item.id)
+				return
+			case AT.MovedFrom:
+				this.onlocal.delete(item.id)
+				return
+			case AT.MovedTo:
+				this.onlocal.add(item.id)
+				return
+		}
 	}
 
 	private checkForMoved(item: Item): boolean {
@@ -398,26 +425,34 @@ export default class Vessel {
 	}
 
 	private moveFile(from: Item, to: Item): void {
+		this.checkIfLocal(from)
+		this.checkIfLocal(to)
 		this.skiplist.add(from.path, 1).add(to.path, 1)
 		this.store.move(from, to).then(written => {
 			if (written) return
 			this.skiplist.reduce(from.path)
 			this.skiplist.reduce(to.path)
 		})
+		setTimeout(() => {
+			this.skiplist.delete(from.path)
+			this.skiplist.delete(to.path)
+		}, 10000)
 	}
 
 	private applyIO(item: Item, rs?: NodeJS.ReadableStream): void {
+		this.checkIfLocal(item)
 		this.skiplist.add(item.path, 2) // BUG: need to test
 		if (item.type === IT.Dir && !this.store.applyFolderIO(item))
 			this.skiplist.reduce(item.path)
 		else if (item.type === IT.File && !this.store.applyFileIO(item, rs))
 			this.skiplist.reduce(item.path)
+		setTimeout(() => this.skiplist.delete(item.path), 10000)
 	}
 
 	getRS(item: Item): NodeJS.ReadableStream | null {
 		const latest = this.index.dig(item)
 		if (latest?.id !== item.id) console.log(this.user, "Sending wrong file")
-		const rs = this.store.createRS(latest)
+		const rs = this.store.createRS(latest) // TODO: compute and compare hash
 		if (rs) this.logger(this.loggerconf.send, "SENDING", latest.path)
 		return rs
 	}
@@ -445,9 +480,8 @@ export default class Vessel {
 		)
 
 		ressarr.forEach(([res]) => {
-			if (res.rename && !res.new) {
-				if (res.before) this.moveFile(res.before, res.after)
-			}
+			if (res.rename && !res.new && res.before)
+				this.moveFile(res.before, res.after)
 		})
 
 		ressarr.forEach(([res, p]) => {
@@ -490,7 +524,7 @@ export default class Vessel {
 		const perms = PermissionManager.defaultPerms(this.sharetype)
 		if (perms.read) this.permmanager.grant(PERMISSION.READ, nid)
 		if (perms.write) this.permmanager.grant(PERMISSION.WRITE, nid)
-		const invite = {
+		const invite: Invite = {
 			sharetype: this.sharetype,
 			peers: this.proxylist.serialize().map(p => p.nid),
 			perms: perms,
