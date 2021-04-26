@@ -101,4 +101,13 @@ export default class HTTPProxy extends Proxy {
 		if (resobj.code !== ResponseCode.DNE)
 			throw Error("HTTPProxy.grantPerm: permission grant not received")
 	}
+
+	async checkIndexVer(id: string): Promise<IndexArray | null> {
+		const res = await this.fetch(APIS.checkIndexVer, {
+			body: JSON.stringify({ id }),
+		})
+		if (!res) return null
+		const resobj: VesselResponse<IndexArray> = await res.json()
+		return resobj.data ?? null
+	}
 }

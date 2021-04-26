@@ -44,6 +44,11 @@ const APIS: VesselAPIs = {
 		method: "POST",
 		headers: { "Content-Type": "application/json" },
 	},
+	checkIndexVer: {
+		end: "/checkindex",
+		method: "POST",
+		headers: { "Content-Type": "application/json" },
+	},
 }
 
 export default APIS

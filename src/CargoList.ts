@@ -47,7 +47,7 @@ export default class CargoList {
 		this.rsdirp = drs[1]
 	}
 
-	equal(actionid: string): boolean {
+	verEq(actionid: string): boolean {
 		return this.lastActionId === actionid
 	}
 

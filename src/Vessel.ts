@@ -32,17 +32,7 @@ import ABCStorage from "./Storages/ABCStorage"
 import { LocalStorage } from "./Storages/LocalDrive"
 import SkipList from "./SkipList"
 import { checkLoggerConfig } from "./defaultconf"
-import HTTPProxy from "./Proxies/HTTPProxy"
 
-/**
- * TODO
- * - since mem footprint is not really an issue, at least for small amount of files, 4000 files is about 0.5 MB
- * 	 the crdt can be treated as an state-based crdt during network init and rejoin
- *   and as an operation-based when online (need log for transmission gurantee) (or even just send whole state in updates)
- * - matching file hashes needs to be handled differently
- * - periodically check cargolist version
- *
- */
 export default class Vessel {
 	user: string
 	root: string
@@ -66,7 +56,6 @@ export default class Vessel {
 	private admin = false
 	private permissions: Permissions = { write: false, read: false }
 	private permreqlist: { nid: NID; perm: PERMISSION }[] = []
-	private permmanager?: PermissionManager
 	private afterOnline?: () => void
 	private apply = this.applyInit
 
@@ -163,8 +152,6 @@ export default class Vessel {
 		this._server = new VesselServer(this, this.nid.host, this.nid.port)
 		this._sharetype = sharetype
 		this.permissions = PermissionManager.defaultPerms(sharetype)
-		this.permmanager = new PermissionManager()
-		this.permmanager.grantAll(this.permissions, this.nid)
 		this.admin = true
 		this._setupready = this.setupEvents()
 		this.saveSettings()
@@ -255,7 +242,8 @@ export default class Vessel {
 		return value
 	}
 
-	logger(print?: boolean, ...msg: string[]): void {
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	logger(print?: boolean, ...msg: any[]): void {
 		if (print) console.log(cts(), this.user, ...msg)
 	}
 
@@ -500,9 +488,7 @@ export default class Vessel {
 
 	grantPerm(i: number): void {
 		const grantreq = this.permreqlist.splice(i)[0]
-		const p = this.proxylist
-			.filter(p => p instanceof HTTPProxy)
-			.find(p => (p as HTTPProxy).nid === grantreq.nid)
+		const p = this.proxylist.get(grantreq.nid)
 		if (!p) throw Error("Vessel.grantPerm: proxy not found")
 		p.grantPerm({ priv: grantreq.perm, grant: true })
 	}
@@ -520,18 +506,24 @@ export default class Vessel {
 	}
 
 	invite(nid: NID): Invite | null {
-		if (!this.isAdmin || !this.permmanager) return null
-		const perms = PermissionManager.defaultPerms(this.sharetype)
-		if (perms.read) this.permmanager.grant(PERMISSION.READ, nid)
-		if (perms.write) this.permmanager.grant(PERMISSION.WRITE, nid)
+		if (!this.isAdmin) return null
 		const invite: Invite = {
 			sharetype: this.sharetype,
 			peers: this.proxylist.serialize().map(p => p.nid),
-			perms: perms,
+			perms: PermissionManager.defaultPerms(this.sharetype),
 		}
-		this.permmanager.grant
 		this.proxylist.addNode(Medium.http, { nid })
 		this.saveSettings()
 		return invite
+	}
+
+	checkIndexVer(nid: NID, id: string): IndexArray | null {
+		if (this.index.verEq(id)) return null
+		const p = this.proxylist.get(nid)
+		if (!p) throw Error("Vessel.grantPerm: proxy not found")
+		Promise.resolve(p.fetchIndex()).then(index => {
+			if (index) this.updateCargo([[index, p]])
+		})
+		return this.getIndexArray()
 	}
 }

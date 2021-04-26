@@ -17,4 +17,5 @@ export default abstract class Proxy {
 	abstract addPeer(src: Vessel | NID): ProxyRes<ResponseCode>
 	abstract reqPerm(src: NID): void
 	abstract grantPerm(grant: PermissionGrant): void
+	abstract checkIndexVer(id: string): ProxyRes<IndexArray>
 }

@@ -12,6 +12,13 @@ export default class ProxyInterface extends Array<Proxy> {
 		return proxy
 	}
 
+	get(nid: NID): Proxy | null {
+		const p = this.filter(p => p instanceof HTTPProxy).find(
+			p => (p as HTTPProxy).nid === nid
+		)
+		return p ?? null
+	}
+
 	has(nid: NID): boolean {
 		return this.some(p => p instanceof HTTPProxy && p.nid === nid)
 	}

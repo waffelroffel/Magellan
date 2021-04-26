@@ -52,13 +52,13 @@ export interface Item {
 	id: string
 	type: ItemType
 	lastModified: number
-	lastAction: ActionType // TODO: referrence to LOG/ LogItem id
+	lastAction: ActionType
 	lastActionBy: string
 	actionId: string
 	hash?: string // Files only
 	tomb?: Tomb
-	//parent: { path: string; id: string } | null //TODO
-	//reachable?: boolean //TODO
+	//parent: { path: string; id: string } | null
+	//reachable?: boolean
 	clock: VectorClock
 }
 
@@ -168,6 +168,7 @@ export interface VesselAPIs {
 	addpeer: Api
 	reqPerm: Api
 	grantPerm: Api
+	checkIndexVer: Api
 }
 
 export interface PermissionGrant {

@@ -148,5 +148,14 @@ export default class VesselServer {
 			this.vessel.setPerm(req.body)
 			return { msg: `${req.body.priv} permission received`, code: RC.DNE }
 		})
+
+		this.server.post<{
+			Body: { nid: NID; id: string }
+			Reply: VesselResponse<IndexArray>
+		}>("/checkindex", async req => {
+			const index = this.vessel.checkIndexVer(req.body.nid, req.body.id)
+			if (!index) return { msg: "Index version equal", code: RC.DNE }
+			return { msg: "Index not equal", code: RC.DNE, data: index }
+		})
 	}
 }
