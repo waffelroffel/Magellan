@@ -34,8 +34,9 @@ export class LocalStorage extends ABCStorage {
 	}
 
 	lastmodified(item: Item): number | null {
-		if (!existsSync(this.relpath(item))) return null
-		return statSync(this.relpath(item)).mtimeMs
+		const relpath = this.relpath(item)
+		if (!existsSync(relpath)) return null
+		return statSync(relpath).mtimeMs
 	}
 
 	computehash(item: Item): Promise<string> {
@@ -45,47 +46,45 @@ export class LocalStorage extends ABCStorage {
 		return new Promise(res => rs.on("end", () => res(hash.digest("hex"))))
 	}
 
-	private hashpipe(rs: NodeJS.ReadableStream): Promise<string> {
+	private checkhash(rs: NodeJS.ReadableStream, h: string): void {
 		const hash = createHash("sha256")
 		rs.on("data", (data: string) => hash.write(data))
-		return new Promise(res => rs.on("end", () => res(hash.digest("hex"))))
+		rs.on("end", () => {
+			if (hash.digest("hex") !== h) throw Error("hashes not equal")
+		})
 	}
 
 	async applyFolderIO(item: Item): Promise<boolean> {
-		const abspath = this.relpath(item)
-		const exists = existsSync(abspath)
+		const relpath = this.relpath(item)
+		const exists = existsSync(relpath)
 		if (item.lastAction === AT.Remove && exists)
-			return rmdir(abspath, { recursive: true }).then(() => true)
+			return rmdir(relpath, { recursive: true }).then(() => true)
 		if (item.lastAction === AT.Add && !exists)
-			return mkdir(abspath, { recursive: true }).then(() => true)
+			return mkdir(relpath, { recursive: true }).then(() => true)
 		return false
 	}
 
 	async applyFileIO(item: Item, rs?: NodeJS.ReadableStream): Promise<boolean> {
 		if (!item.hash) throw Error()
 		// write to .tmp then change ext
-		const abspath = this.relpath(item)
-		const exists = existsSync(abspath)
+		const relpath = this.relpath(item)
+		const exists = existsSync(relpath)
 		if (item.lastAction === AT.Remove && exists) {
 			const tmppath = join(this.root, this.tempfolder, uuid())
 			this.tempdeleted.set(item.hash, [tmppath, new Date().valueOf()])
-			return rename(this.relpath(item), tmppath).then(() => true)
+			return rename(relpath, tmppath).then(() => true)
 		}
 		if (this.canwrite.includes(item.lastAction)) {
 			const fpath = this.tempdeleted.get(item.hash)?.[0]
 			if (fpath) {
 				const tmprs = createReadStream(fpath)
-				this.hashpipe(tmprs).then(hash => {
-					if (item.hash !== hash) throw Error("hashes not equal")
-				})
-				tmprs.pipe(createWriteStream(abspath))
+				this.checkhash(tmprs, item.hash)
+				tmprs.pipe(createWriteStream(relpath))
 				this.tempdeleted.delete(item.hash)
 				return new Promise(res => tmprs.on("end", () => res(true)))
 			} else if (rs) {
-				this.hashpipe(rs).then(hash => {
-					if (item.hash !== hash) throw Error("hashes not equal")
-				})
-				rs.pipe(createWriteStream(abspath))
+				this.checkhash(rs, item.hash)
+				rs.pipe(createWriteStream(relpath))
 				return new Promise(res => rs.on("end", () => res(true)))
 			} else throw Error()
 		}
@@ -94,9 +93,9 @@ export class LocalStorage extends ABCStorage {
 
 	createRS(item: Item): NodeJS.ReadableStream | null {
 		if (item.type === IT.Dir || item.lastAction === AT.Remove) return null
-		if (!existsSync(this.relpath(item)))
-			throw Error(`${this.relpath(item)} doesn't exist`)
-		return createReadStream(this.relpath(item))
+		const relpath = this.relpath(item)
+		if (!existsSync(relpath)) throw Error(`${relpath} doesn't exist`)
+		return createReadStream(relpath)
 	}
 
 	async move(from: Item, to: Item): Promise<boolean> {
