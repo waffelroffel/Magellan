@@ -1,9 +1,16 @@
 import { createHash } from "crypto"
-import { existsSync, createWriteStream, createReadStream, statSync } from "fs"
-import { mkdir, rename, rm, rmdir } from "fs/promises"
+import {
+	existsSync,
+	createWriteStream,
+	createReadStream,
+	statSync,
+	mkdirSync,
+} from "fs"
+import { mkdir, rename, rmdir } from "fs/promises"
 import { join } from "path"
 import { ActionType as AT, ItemType as IT } from "../enums"
 import { Item } from "../interfaces"
+import { uuid } from "../utils"
 import ABCStorage from "./ABCStorage"
 
 /**
@@ -13,10 +20,13 @@ import ABCStorage from "./ABCStorage"
 export class LocalStorage extends ABCStorage {
 	root: string
 	canwrite: AT[] = [AT.Add, AT.Change, AT.MovedTo]
+	tempfolder = ".temp"
+	tempdeleted = new Map<string, [string, number]>()
 
 	constructor(root: string) {
 		super()
 		this.root = root
+		mkdirSync(join(this.root, this.tempfolder))
 	}
 
 	relpath(item: Item): string {
@@ -52,17 +62,32 @@ export class LocalStorage extends ABCStorage {
 	}
 
 	async applyFileIO(item: Item, rs?: NodeJS.ReadableStream): Promise<boolean> {
+		if (!item.hash) throw Error()
 		// write to .tmp then change ext
 		const abspath = this.relpath(item)
 		const exists = existsSync(abspath)
-		if (item.lastAction === AT.Remove && exists)
-			return rm(abspath).then(() => true)
-		if (this.canwrite.includes(item.lastAction) && rs) {
-			this.hashpipe(rs).then(hash => {
-				if (item.hash !== hash) throw Error("hashes not equal")
-			})
-			rs.pipe(createWriteStream(abspath))
-			return new Promise(res => rs.on("end", () => res(true)))
+		if (item.lastAction === AT.Remove && exists) {
+			const tmppath = join(this.root, this.tempfolder, uuid())
+			this.tempdeleted.set(item.hash, [tmppath, new Date().valueOf()])
+			return rename(this.relpath(item), tmppath).then(() => true)
+		}
+		if (this.canwrite.includes(item.lastAction)) {
+			const fpath = this.tempdeleted.get(item.hash)?.[0]
+			if (fpath) {
+				const tmprs = createReadStream(fpath)
+				this.hashpipe(tmprs).then(hash => {
+					if (item.hash !== hash) throw Error("hashes not equal")
+				})
+				tmprs.pipe(createWriteStream(abspath))
+				this.tempdeleted.delete(item.hash)
+				return new Promise(res => tmprs.on("end", () => res(true)))
+			} else if (rs) {
+				this.hashpipe(rs).then(hash => {
+					if (item.hash !== hash) throw Error("hashes not equal")
+				})
+				rs.pipe(createWriteStream(abspath))
+				return new Promise(res => rs.on("end", () => res(true)))
+			} else throw Error()
 		}
 		return false
 	}

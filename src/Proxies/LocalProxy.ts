@@ -44,4 +44,8 @@ export default class LocalProxy extends Proxy {
 	grantPerm(): PermissionGrant {
 		throw Error("LocalProxy.grantPerm: not implemented")
 	}
+
+	checkIndexVer(): IndexArray | null {
+		throw Error("LocalProxy.checkIndexVer: not implemented")
+	}
 }

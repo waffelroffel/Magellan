@@ -43,6 +43,7 @@ export default class Vessel {
 	skiplist = new SkipList()
 	potmovefiles = new Map<string, Item>()
 	init = true
+	ignoreNewOnRejoin = false
 	ignored: string[]
 	nid: NID
 	loggerconf: LoggerConfig
@@ -97,7 +98,7 @@ export default class Vessel {
 		this.root = root
 		this.tablepath = join(root, this.TABLE_END)
 		this.settingspath = join(root, this.SETTINGS_END)
-		this.ignored = [this.TABLE_END, this.SETTINGS_END]
+		this.ignored = [this.TABLE_END, this.SETTINGS_END, ".temp/**"]
 		this._index = new CargoList(this.tablepath, opts)
 		this.nid = { host: "localhost", port: randint(8000, 8888) }
 		this.loggerconf = checkLoggerConfig(opts?.loggerconf)
@@ -124,7 +125,8 @@ export default class Vessel {
 		return true
 	}
 
-	rejoin(): Vessel {
+	rejoin(ignoreNew = false): Vessel {
+		this.ignoreNewOnRejoin = ignoreNew
 		this.loadSettings()
 		this.index.mergewithlocal()
 		this._server = new VesselServer(this, this.nid.host, this.nid.port)
@@ -133,15 +135,15 @@ export default class Vessel {
 			const indices: [IndexArray, Proxy][] = []
 			for (const p of this.proxylist) {
 				const index = await p.fetchIndex()
-				if (!index) throw Error()
-				indices.push([index, p])
+				if (index) indices.push([index, p])
 			}
 			this.updateCargo(indices)
 		}
 		return this
 	}
 
-	join(nid: NID): Vessel {
+	join(nid: NID, ignoreLocal = true): Vessel {
+		this.ignoreNewOnRejoin = ignoreLocal
 		this._server = new VesselServer(this, this.nid.host, this.nid.port)
 		this._setupready = this.setupEvents()
 		this.afterOnline = () => this.joinvia(nid)
@@ -259,7 +261,7 @@ export default class Vessel {
 				cwd: abspath(this.root),
 				disableGlobbing: true,
 				ignored: this.ignored,
-				ignoreInitial: false, // TODO
+				ignoreInitial: this.ignoreNewOnRejoin,
 				awaitWriteFinish: { stabilityThreshold: 1000 },
 				ignorePermissionErrors: true,
 			})
@@ -325,7 +327,8 @@ export default class Vessel {
 
 		this.checkIfExisting(item)
 		this.checkIfLocal(item)
-		const toDelay = this.checkForMoved(item)
+		const toDelay = false
+		this.checkForMoved
 
 		// Assuming no local conflicts
 		const resarr = this.index.apply(item)
@@ -400,10 +403,13 @@ export default class Vessel {
 
 		this.logger(this.loggerconf.remote, "<-", item.lastAction, item.path)
 		this.index.apply(item).forEach(res => {
+			/*
+			if (res.after.lastAction === AT.MovedTo) return
 			if (res.new && res.after.lastAction === AT.MovedFrom) {
 				if (!res.after.tomb?.movedTo) throw Error()
 				this.moveFile(res.after, this.index.dig(res.after))
-			} else if (res.new) this.applyIO(res.after, rs)
+			*/
+			if (res.new) this.applyIO(res.after, rs)
 			else if (res.rename && res.before) this.moveFile(res.before, res.after)
 			else throw Error()
 		})
@@ -440,7 +446,7 @@ export default class Vessel {
 	getRS(item: Item): NodeJS.ReadableStream | null {
 		const latest = this.index.dig(item)
 		if (latest?.id !== item.id) console.log(this.user, "Sending wrong file")
-		const rs = this.store.createRS(latest) // TODO: compute and compare hash
+		const rs = this.store.createRS(latest)
 		if (rs) this.logger(this.loggerconf.send, "SENDING", latest.path)
 		return rs
 	}

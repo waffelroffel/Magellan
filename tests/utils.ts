@@ -54,7 +54,7 @@ function getAllFiles(path: string): [string[], string[]] {
 		files: string[]
 	): void => {
 		readdirSync(path, { withFileTypes: true }).forEach(d => {
-			if (d.name === "indextable.json" || d.name === "settings.json") return
+			if (["indextable.json", "settings.json", ".temp"].includes(d.name)) return
 			const subpath = join(parent, d.name)
 			if (d.isDirectory()) {
 				dirs.push(subpath)

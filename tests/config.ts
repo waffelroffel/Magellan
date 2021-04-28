@@ -65,7 +65,7 @@ export const SETTINGS_3P: Settings[] = [
 		],
 		sharetype: SHARE_TYPE.All2All,
 		privs: { write: true, read: true },
-		ignored: ["indextable.json", "settings.json"],
+		ignored: ["indextable.json", "settings.json", ".temp/**"],
 		loggerconf: {
 			init: false,
 			ready: false,
@@ -91,7 +91,7 @@ export const SETTINGS_3P: Settings[] = [
 		],
 		sharetype: SHARE_TYPE.All2All,
 		privs: { write: true, read: true },
-		ignored: ["indextable.json", "settings.json"],
+		ignored: ["indextable.json", "settings.json", ".temp/**"],
 		loggerconf: {
 			init: false,
 			ready: false,
@@ -117,7 +117,7 @@ export const SETTINGS_3P: Settings[] = [
 		],
 		sharetype: SHARE_TYPE.All2All,
 		privs: { write: true, read: true },
-		ignored: ["indextable.json", "settings.json"],
+		ignored: ["indextable.json", "settings.json", ".temp/**"],
 		loggerconf: {
 			init: false,
 			ready: false,
