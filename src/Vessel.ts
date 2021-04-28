@@ -160,6 +160,12 @@ export default class Vessel {
 		return this
 	}
 
+	// TODO: make chodikar optional for manual apply(Add/Rem/Chg)(File/Dir)
+	watch(): Vessel {
+		this._setupready = this.setupEvents()
+		return this
+	}
+
 	connect(): Vessel {
 		this.startServer().then(() => this.afterOnline?.())
 		return this
@@ -289,6 +295,22 @@ export default class Vessel {
 					}, 2000)*/
 				})
 		})
+	}
+
+	applyAddFile(path: string): void {
+		this.apply(path, IT.File, AT.Add)
+	}
+	applyRemFile(path: string): void {
+		this.apply(path, IT.File, AT.Remove)
+	}
+	applyChgFile(path: string): void {
+		this.apply(path, IT.File, AT.Change)
+	}
+	applyAddDir(path: string): void {
+		this.apply(path, IT.Dir, AT.Add)
+	}
+	applyRemDir(path: string): void {
+		this.apply(path, IT.Dir, AT.Remove)
 	}
 
 	private async applyInit(path: string, type: IT, action: AT): Promise<void> {
