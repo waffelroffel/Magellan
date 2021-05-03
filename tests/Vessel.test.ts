@@ -1,4 +1,5 @@
-import { renameSync, writeFileSync } from "fs"
+import { writeFileSync } from "fs"
+import { rename, writeFile } from "fs/promises"
 import { join } from "path"
 import { SHARE_TYPE } from "../src/enums"
 import Vessel from "../src/Vessel"
@@ -31,7 +32,7 @@ test("initial sync", async () => {
 	vessels[0].exit()
 	vessels[1].exit()
 
-	await delay(1000)
+	await delay(500)
 
 	expect(assertIndices(vessels)).toBe(true)
 	expect(assertDirsAndFiles(roots)).toBe(true)
@@ -55,20 +56,20 @@ test("concurrent files", async () => {
 
 	vessels.forEach(v => v.rejoin())
 
-	await delay(1000)
+	await delay(500)
 
-	roots.forEach((r, i) => writeFileSync(join(r, "dup.txt"), users[i]))
+	roots.forEach((r, i) => writeFile(join(r, "dup.txt"), users[i]))
 
-	await delay(2000)
+	await delay(1500)
 
 	vessels.forEach(v => v.watcher.close())
 	vessels.forEach(v => v.connect())
 
-	await delay(1000)
+	await delay(500)
 
 	vessels.forEach(v => v.exit())
 
-	await delay(1000)
+	await delay(500)
 
 	expect(assertIndices(vessels)).toBe(true)
 	expect(assertDirsAndFiles(roots)).toBe(true)
@@ -92,19 +93,19 @@ test("renaming files", async () => {
 
 	vessels.forEach(v => v.rejoin())
 
-	await delay(1000)
+	await delay(500)
 
 	vessels.forEach(v => v.connect())
 
-	await delay(1000)
+	await delay(500)
 
-	renameSync("testroot/dave/d0_0.txt", "testroot/dave/d_dir1/d0_0.txt")
+	rename("testroot/dave/d0_0.txt", "testroot/dave/d_dir1/d0_0.txt")
 
-	await delay(2000)
+	await delay(1500)
 
 	vessels.forEach(v => v.exit())
 
-	await delay(1000)
+	await delay(500)
 
 	expect(assertIndices(vessels)).toBe(true)
 	expect(assertDirsAndFiles(roots)).toBe(true)

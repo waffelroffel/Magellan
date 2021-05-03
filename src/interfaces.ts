@@ -40,6 +40,8 @@ export interface LoggerConfig {
 
 export interface VesselOptions extends CargoListOptions {
 	loggerconf?: LoggerConfig
+	host?: string
+	port?: number
 }
 
 // ---------------- CARGOLIST ----------------

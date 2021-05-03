@@ -1,4 +1,3 @@
-import { ResponseCode } from "../enums"
 import { Item, IndexArray, Invite, PermissionGrant } from "../interfaces"
 import PermissionManager from "../Permissions"
 import Vessel from "../Vessel"
@@ -32,9 +31,8 @@ export default class LocalProxy extends Proxy {
 		}
 	}
 
-	addPeer(src: Vessel): ResponseCode {
+	addPeer(src: Vessel): void {
 		this.local.addVessel(src)
-		return ResponseCode.DNE
 	}
 
 	reqPerm(): PermissionGrant {

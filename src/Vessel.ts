@@ -100,7 +100,10 @@ export default class Vessel {
 		this.settingspath = join(root, this.SETTINGS_END)
 		this.ignored = [this.TABLE_END, this.SETTINGS_END, ".temp/**"]
 		this._index = new CargoList(this.tablepath, opts)
-		this.nid = { host: "localhost", port: randint(8000, 8888) }
+		this.nid = {
+			host: opts?.host ?? "localhost",
+			port: opts?.port ?? randint(8000, 8888),
+		}
 		this.loggerconf = checkLoggerConfig(opts?.loggerconf)
 		this.store = this.initStorage(root, "local")
 	}
@@ -374,15 +377,6 @@ export default class Vessel {
 			else this.broadcast(item)
 		}
 		this.index.putInQ(item, post)
-		/*
-		const resarr = this.index.apply(item)
-		if (resarr.length > 1) throw Error("local conflicts")
-		this.index.save()
-
-		this.logger(this.loggerconf.local, "->", action, item.path)
-		if (!this.online) return
-		if (toDelay) setTimeout(() => this.broadcast(item), 2000)
-		else this.broadcast(item)*/
 	}
 
 	private checkIfExisting(item: Item): void {
@@ -457,20 +451,6 @@ export default class Vessel {
 			})
 		}
 		this.index.putInQ(item, post)
-		/*
-		this.index.apply(item).forEach(res => {
-			
-			if (res.after.lastAction === AT.MovedTo) return
-			if (res.new && res.after.lastAction === AT.MovedFrom) {
-				if (!res.after.tomb?.movedTo) throw Error()
-				this.moveFile(res.after, this.index.dig(res.after))
-			
-			if (res.new) this.applyIO(res.after, data)
-			else if (res.rename && res.before) this.moveFile(res.before, res.after)
-			else throw Error()
-		})
-		this.index.save()
-		*/
 
 		//TODO: forward to known peers
 	}
@@ -527,7 +507,7 @@ export default class Vessel {
 		const proxy = this.proxylist.addNode(Medium.local, { vessel })
 		if (!(proxy instanceof LocalProxy))
 			throw Error("Vessel.addVessel: not localproxy")
-		//this.updateCargo([[proxy.fetchIndex(), proxy]])
+		this.updateCargo([[proxy.fetchIndex(), proxy]])
 		proxy.addPeer(vessel)
 	}
 

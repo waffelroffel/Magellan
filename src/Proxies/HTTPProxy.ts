@@ -82,12 +82,11 @@ export default class HTTPProxy extends Proxy {
 		return resobj.data
 	}
 
-	async addPeer(src: NID): Promise<ResponseCode> {
+	async addPeer(src: NID): Promise<void> {
 		const res = await this.fetch(APIS.addpeer, { body: JSON.stringify(src) })
 		if (!res) throw Error("no res")
 		const resobj: VesselResponse = await res.json()
 		if (resobj.code !== ResponseCode.DNE) throw Error(resobj.msg)
-		return resobj.code
 	}
 
 	async reqPerm(src: NID): Promise<void> {

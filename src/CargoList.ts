@@ -34,6 +34,7 @@ export default class CargoList {
 	private lastActionId = "0"
 	private queue: QueueItem[] = []
 	private timerid: NodeJS.Timeout
+	private busy = false
 
 	get DUMMY(): Item {
 		return CargoList.Item("", IT.File, AT.Change, "zzz")
@@ -122,10 +123,13 @@ export default class CargoList {
 
 	processNext(): void {
 		if (this.queue.length === 0) return
+		if (this.busy) return
+		this.busy = true
 		const qitem = this.queue.shift()
 		if (!qitem) return
 		const resarr = this.apply(qitem.item)
 		qitem.post?.(resarr)
+		this.busy = false
 	}
 
 	apply(item: Item): Resolution[] {
