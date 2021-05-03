@@ -12,12 +12,12 @@ export default class LocalProxy extends Proxy {
 		this.local = vessel
 	}
 
-	send(item: Item, rs?: NodeJS.ReadableStream): void {
-		this.local.applyIncoming(JSON.parse(JSON.stringify(item)), rs)
+	send(item: Item, data?: string): void {
+		this.local.applyIncoming(JSON.parse(JSON.stringify(item)), data)
 	}
 
-	fetchItems(items: Item[]): (NodeJS.ReadableStream | null)[] {
-		return items.map(i => this.local.getRS(i))
+	fetchItems(items: Item[]): (string | null)[] {
+		return items.map(i => this.local.getData(i))
 	}
 
 	fetchIndex(): IndexArray {

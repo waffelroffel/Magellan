@@ -37,9 +37,8 @@ export default class ProxyInterface extends Array<Proxy> {
 		if (i === -1) throw Error("ProxyInterface.removeNode: not in array")
 		this.splice(i, 1)
 	}
-
-	broadcast(item: Item, rs?: NodeJS.ReadableStream): void {
-		this.forEach(p => p.send(item, rs))
+	broadcast(item: Item, getData: () => string | null): void {
+		this.forEach(p => p.send(item, getData() ?? undefined))
 	}
 
 	serialize(): { nid: NID }[] {

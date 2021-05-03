@@ -37,7 +37,7 @@ export default class HTTPProxy extends Proxy {
 		}
 	}
 
-	async send(item: Item, rs?: NodeJS.ReadableStream): Promise<void> {
+	async send(item: Item, data?: string): Promise<void> {
 		const res = await this.fetch(APIS.senditemmeta, {
 			body: JSON.stringify(item),
 		})
@@ -45,18 +45,24 @@ export default class HTTPProxy extends Proxy {
 		const resobj: VesselResponse<Sid> = await res.json()
 		if (resobj.code === ResponseCode.DNE) return
 		if (!resobj.data?.sid) throw Error("HTTPProxy.send: no Sid received")
-		this.fetch(APIS.senditemdata, { params: resobj.data.sid, body: rs })
+		this.fetch(APIS.senditemdata, {
+			params: resobj.data.sid,
+			body: JSON.stringify({ data }),
+		})
 	}
 
-	fetchItems(items: Item[]): Promise<NodeJS.ReadableStream | null>[] {
+	fetchItems(items: Item[]): Promise<string | null>[] {
 		return items.map(i => this.fetchItem(i))
 	}
 
-	private async fetchItem(item: Item): Promise<NodeJS.ReadableStream | null> {
+	private async fetchItem(item: Item): Promise<string | null> {
 		if (item.type === IT.Dir) return null
-		const res = await this.fetch(APIS.getitem, { body: JSON.stringify(item) })
+		const res = await this.fetch(APIS.getitem, {
+			body: JSON.stringify(item),
+		})
 		if (!res) return null
-		return res.body
+		const resobj: VesselResponse<string> = await res.json()
+		return resobj.data ?? null
 	}
 
 	async fetchIndex(): Promise<IndexArray | null> {

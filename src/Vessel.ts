@@ -188,6 +188,7 @@ export default class Vessel {
 		this.saveSettings()
 		this.index.save()
 		this.logger(this.loggerconf.offline, "EXITED")
+		if (this.store instanceof LocalStorage) this.store.flush()
 		return this
 	}
 
@@ -271,11 +272,11 @@ export default class Vessel {
 				awaitWriteFinish: { stabilityThreshold: 1000 },
 				ignorePermissionErrors: true,
 			})
-				.on("add", (path: string) => this.apply(path, IT.File, AT.Add))
-				.on("change", (path: string) => this.apply(path, IT.File, AT.Change))
-				.on("unlink", (path: string) => this.apply(path, IT.File, AT.Remove))
-				.on("addDir", (path: string) => this.apply(path, IT.Dir, AT.Add))
-				.on("unlinkDir", (path: string) => this.apply(path, IT.Dir, AT.Remove))
+				.on("add", (path: string) => this.applyAddFile(path))
+				.on("change", (path: string) => this.applyChgFile(path))
+				.on("unlink", (path: string) => this.applyRemFile(path))
+				.on("addDir", (path: string) => this.applyAddDir(path))
+				.on("unlinkDir", (path: string) => this.applyRemDir(path))
 				.on("error", e =>
 					this.logger(this.loggerconf.error, "ERROR", e.message)
 				) // BUG: when empty folder gets deleted throws error
@@ -339,13 +340,16 @@ export default class Vessel {
 
 	private async applyLocal(path: string, type: IT, action: AT): Promise<void> {
 		if (!this.permissions.write) return
-		if (this.skiplist.reduce(path)) return
+		//if (this.skiplist.reduce(path)) return
 
 		const item = CargoList.Item(path, type, action, this.user)
 		item.lastModified = this.store.lastmodified(item) ?? ct()
 
 		if (type === IT.File && action !== AT.Remove)
 			item.hash = await this.store.computehash(item)
+
+		const tmp = this.index.getLatest(item.path)?.hash
+		if (tmp === item.hash) return //console.log(this.user, "skip", path, type, action, tmp, item.hash)
 
 		this.checkIfExisting(item)
 		this.checkIfLocal(item)
@@ -417,10 +421,11 @@ export default class Vessel {
 	}
 
 	private broadcast(item: Item): void {
-		this.proxylist.broadcast(item, this.getRS(item) ?? undefined)
+		this.proxylist.broadcast(item, () => this.getData(item))
 	}
 
-	applyIncoming(item: Item, rs?: NodeJS.ReadableStream): void {
+	// applyIncoming(item: Item, rs?: NodeJS.ReadableStream): void {
+	applyIncoming(item: Item, data?: string): void {
 		if (!this.permissions.read) return
 
 		this.logger(this.loggerconf.remote, "<-", item.lastAction, item.path)
@@ -431,7 +436,7 @@ export default class Vessel {
 				if (!res.after.tomb?.movedTo) throw Error()
 				this.moveFile(res.after, this.index.dig(res.after))
 			*/
-			if (res.new) this.applyIO(res.after, rs)
+			if (res.new) this.applyIO(res.after, data)
 			else if (res.rename && res.before) this.moveFile(res.before, res.after)
 			else throw Error()
 		})
@@ -443,26 +448,38 @@ export default class Vessel {
 	private moveFile(from: Item, to: Item): void {
 		this.checkIfLocal(from)
 		this.checkIfLocal(to)
-		this.skiplist.add(from.path, 1).add(to.path, 1)
-		this.store.move(from, to).then(written => {
-			if (written) return
+		//this.skiplist.add(from.path, 1).add(to.path, 1)
+		this.store.move(from, to)
+		/*
+		if (!this.store.move(from, to)) {
 			this.skiplist.reduce(from.path)
 			this.skiplist.reduce(to.path)
-		})
+		}
 		setTimeout(() => {
 			this.skiplist.delete(from.path)
 			this.skiplist.delete(to.path)
 		}, 10000)
+		*/
 	}
 
-	private applyIO(item: Item, rs?: NodeJS.ReadableStream): void {
+	// private applyIO(item: Item, rs?: NodeJS.ReadableStream): void {
+	private applyIO(item: Item, data?: string): void {
 		this.checkIfLocal(item)
-		this.skiplist.add(item.path, 2) // BUG: need to test
-		if (item.type === IT.Dir && !this.store.applyFolderIO(item))
-			this.skiplist.reduce(item.path)
-		else if (item.type === IT.File && !this.store.applyFileIO(item, rs))
-			this.skiplist.reduce(item.path)
-		setTimeout(() => this.skiplist.delete(item.path), 10000)
+		//this.skiplist.add(item.path, 1)
+		if (item.type === IT.Dir) this.store.applyFolderIO(item)
+		//&& !this.store.applyFolderIO(item))
+		//this.skiplist.reduce(item.path)
+		else if (item.type === IT.File) this.store.applyFileIO(item, data) // && !this.store.applyFileIO(item, data))
+		//this.skiplist.reduce(item.path)
+		//setTimeout(() => this.skiplist.delete(item.path), 10000)
+	}
+
+	getData(item: Item): string | null {
+		const latest = this.index.dig(item)
+		if (latest?.id !== item.id) console.log(this.user, "Sending wrong file")
+		const data = this.store.getData(latest)
+		if (data) this.logger(this.loggerconf.send, "SENDING", latest.path)
+		return data
 	}
 
 	getRS(item: Item): NodeJS.ReadableStream | null {
@@ -480,7 +497,7 @@ export default class Vessel {
 		const proxy = this.proxylist.addNode(Medium.local, { vessel })
 		if (!(proxy instanceof LocalProxy))
 			throw Error("Vessel.addVessel: not localproxy")
-		this.updateCargo([[proxy.fetchIndex(), proxy]])
+		//this.updateCargo([[proxy.fetchIndex(), proxy]])
 		proxy.addPeer(vessel)
 	}
 

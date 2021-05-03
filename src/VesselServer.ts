@@ -7,7 +7,6 @@ import {
 	Invite,
 	Sid,
 	VesselResponse,
-	StreamResponse,
 	IndexArray,
 	PermissionGrant,
 } from "./interfaces"
@@ -28,7 +27,7 @@ export default class VesselServer {
 		this.server = fastify()
 		this.setupClientApi()
 		this.setupRoutes()
-		this.server.addContentTypeParser("app/binary", (_, __, d) => d(null))
+		//this.server.addContentTypeParser("app/binary", (_, __, d) => d(null))
 	}
 
 	listen(): Promise<string> {
@@ -85,13 +84,14 @@ export default class VesselServer {
 			}
 		)
 
-		this.server.post<{ Body: Item; Reply: StreamResponse }>(
+		this.server.post<{ Body: Item; Reply: VesselResponse<string> }>(
 			"/item",
 			async req => {
 				if (!CargoList.validateItem(req.body))
 					return { msg: "Illegal item state", code: RC.ERR }
-				const rs = this.vessel.getRS(req.body)
-				return rs ?? { msg: "Item doesn't exist", code: RC.ERR }
+				const data = this.vessel.getData(req.body)
+				if (!data) return { msg: "Item doesn't exist", code: RC.ERR }
+				return { msg: "Item data", code: RC.ERR, data }
 			}
 		)
 
@@ -110,16 +110,17 @@ export default class VesselServer {
 			}
 		)
 
-		this.server.post<{ Params: Sid; Reply: VesselResponse }>(
-			"/item/data/:sid",
-			async req => {
-				const item = this.tempitems.get(req.params.sid)
-				if (!item) return { msg: "Sid not in queue", code: RC.ERR }
-				this.tempitems.delete(req.params.sid)
-				this.vessel.applyIncoming(item, req.raw) // FIX: req.body undefined
-				return { msg: "Transfer successful", code: RC.DNE }
-			}
-		)
+		this.server.post<{
+			Body: { data: string }
+			Params: Sid
+			Reply: VesselResponse
+		}>("/item/data/:sid", async req => {
+			const item = this.tempitems.get(req.params.sid)
+			if (!item) return { msg: "Sid not in queue", code: RC.ERR }
+			this.tempitems.delete(req.params.sid)
+			this.vessel.applyIncoming(item, req.body.data)
+			return { msg: "Transfer successful", code: RC.DNE }
+		})
 
 		this.server.post<{ Body: NID; Reply: VesselResponse }>(
 			"/addpeer",

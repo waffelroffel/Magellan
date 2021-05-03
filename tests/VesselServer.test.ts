@@ -10,14 +10,7 @@ import {
 	Sid,
 	VesselResponse,
 } from "../src/interfaces"
-import {
-	TEST_INDEXARRAY,
-	TEST_INVITE,
-	TEST_ITEM,
-	TEST_READSTREAM,
-	TEST_TEXT,
-	TEST_WRITESTREAM,
-} from "./config"
+import { TEST_INDEXARRAY, TEST_INVITE, TEST_ITEM, TEST_TEXT } from "./config"
 import APIS from "../src/apis"
 jest.mock("../src/Vessel")
 
@@ -43,7 +36,7 @@ function mockVesselFns(vessel: Vessel): void {
 	Object.defineProperty(vessel, "isAdmin", { get: jest.fn(() => true) }) // jest.spyOn(vessel, "isAdmin", "get").mockReturnValue(true)
 	vessel.getIndexArray = () => TEST_INDEXARRAY
 	vessel.invite = () => TEST_INVITE
-	vessel.getRS = () => TEST_READSTREAM
+	vessel.getData = () => TEST_TEXT
 	vessel.addPeer = () => true
 	vessel.requestPerm = () => true
 }
@@ -82,12 +75,10 @@ describe("VesselServer APIs", () => {
 		expect(res.code).toBe(ResponseCode.DNE)
 	})
 	test("item", async () => {
-		const res = await fetch(`http://localhost:8180${APIS.getitem.end}`, {
-			method: APIS.getitem.method,
-			headers: APIS.getitem.headers,
+		const res = await apifetch<string>(APIS.getitem, {
 			body: JSON.stringify(TEST_ITEM),
 		})
-		expect(res.body.setEncoding("utf8").read()).toBe(TEST_TEXT)
+		expect(res.data).toBe(TEST_TEXT)
 	})
 	test("item/(meta|data)", async () => {
 		const res1 = await apifetch<Sid>(APIS.senditemmeta, {
@@ -99,7 +90,7 @@ describe("VesselServer APIs", () => {
 
 		const res2 = await apifetch(APIS.senditemdata, {
 			params: res1.data.sid,
-			body: TEST_WRITESTREAM,
+			body: JSON.stringify({ data: "SECRET" }),
 		})
 		expect(res2.code).toBe(ResponseCode.DNE)
 		expect(server.tempitems.size).toBe(0)

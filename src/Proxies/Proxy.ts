@@ -10,8 +10,9 @@ import {
 import Vessel from "../Vessel"
 
 export default abstract class Proxy {
-	abstract send(item: Item, rs?: NodeJS.ReadableStream): void
-	abstract fetchItems(items: Item[]): ProxyRes<NodeJS.ReadableStream>[]
+	// abstract send(item: Item, rs?: NodeJS.ReadableStream): void
+	abstract send(item: Item, data?: string): void
+	abstract fetchItems(items: Item[]): ProxyRes<string>[]
 	abstract fetchIndex(): ProxyRes<IndexArray>
 	abstract getinvite(src: NID): ProxyRes<Invite>
 	abstract addPeer(src: Vessel | NID): ProxyRes<ResponseCode>

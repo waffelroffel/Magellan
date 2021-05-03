@@ -13,7 +13,7 @@ const APIS: VesselAPIs = {
 	senditemdata: {
 		end: "/item/data/",
 		method: "POST",
-		headers: { "content-type": "app/binary" },
+		headers: { "content-type": "application/json" },
 	},
 	getitem: {
 		end: "/item",

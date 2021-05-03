@@ -31,6 +31,8 @@ test("initial sync", async () => {
 	vessels[0].exit()
 	vessels[1].exit()
 
+	await delay(1000)
+
 	expect(assertIndices(vessels)).toBe(true)
 	expect(assertDirsAndFiles(roots)).toBe(true)
 })
@@ -66,6 +68,8 @@ test("concurrent files", async () => {
 
 	vessels.forEach(v => v.exit())
 
+	await delay(1000)
+
 	expect(assertIndices(vessels)).toBe(true)
 	expect(assertDirsAndFiles(roots)).toBe(true)
 }, 10000)
@@ -99,6 +103,8 @@ test("renaming files", async () => {
 	await delay(2000)
 
 	vessels.forEach(v => v.exit())
+
+	await delay(1000)
 
 	expect(assertIndices(vessels)).toBe(true)
 	expect(assertDirsAndFiles(roots)).toBe(true)

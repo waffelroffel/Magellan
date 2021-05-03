@@ -150,7 +150,7 @@ export type StreamResponse = NodeJS.ReadableStream | VesselResponse
 
 export interface FetchOptions {
 	params?: string
-	body?: NodeJS.ReadableStream | string
+	body?: string
 }
 export interface Api {
 	end: string
