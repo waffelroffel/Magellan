@@ -1,8 +1,8 @@
-import { v4 } from "uuid"
+import { v4, v5 } from "uuid"
 import { VectorClock } from "./interfaces"
 
-export function uuid(): string {
-	return v4()
+export function uuid(input?: string): string {
+	return input ? v5(input, "f1a1c6fe-2e89-4612-874b-7279af50744a") : v4()
 }
 
 /**

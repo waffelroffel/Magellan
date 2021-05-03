@@ -132,7 +132,7 @@ export class LocalStorage extends ABCStorage {
 				this.iocache.set(item.path, data)
 				writeFileSync(relpath, data)
 				return true
-			} else throw Error()
+			}
 		}
 		return false
 	}

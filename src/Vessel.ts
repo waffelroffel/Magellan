@@ -186,7 +186,7 @@ export default class Vessel {
 		if (this.online) this.disconnect()
 		this.watcher.close()
 		this.saveSettings()
-		this.index.save()
+		this.index.stop()
 		this.logger(this.loggerconf.offline, "EXITED")
 		if (this.store instanceof LocalStorage) this.store.flush()
 		return this
@@ -335,7 +335,13 @@ export default class Vessel {
 
 		this.logger(this.loggerconf.init && this.init, "INIT", action, item.path)
 
-		this.index.apply(item)
+		const post = (resarr: Resolution[]) => {
+			if (resarr.length > 1) throw Error("local conflicts")
+			this.index.save()
+		}
+
+		this.index.putInQ(item, post)
+		//this.index.apply(item)
 	}
 
 	private async applyLocal(path: string, type: IT, action: AT): Promise<void> {
@@ -346,7 +352,7 @@ export default class Vessel {
 		item.lastModified = this.store.lastmodified(item) ?? ct()
 
 		if (type === IT.File && action !== AT.Remove)
-			item.hash = await this.store.computehash(item)
+			item.hash = this.store.computehash(item)
 
 		const tmp = this.index.getLatest(item.path)?.hash
 		if (tmp === item.hash) return //console.log(this.user, "skip", path, type, action, tmp, item.hash)
@@ -356,7 +362,19 @@ export default class Vessel {
 		const toDelay = false
 		this.checkForMoved
 
+		this.logger(this.loggerconf.local, "->", action, item.path)
+
 		// Assuming no local conflicts
+		const post = (resarr: Resolution[]) => {
+			if (resarr.length > 1) throw Error("local conflicts")
+			this.index.save()
+
+			if (!this.online) return
+			if (toDelay) setTimeout(() => this.broadcast(item), 2000)
+			else this.broadcast(item)
+		}
+		this.index.putInQ(item, post)
+		/*
 		const resarr = this.index.apply(item)
 		if (resarr.length > 1) throw Error("local conflicts")
 		this.index.save()
@@ -364,7 +382,7 @@ export default class Vessel {
 		this.logger(this.loggerconf.local, "->", action, item.path)
 		if (!this.online) return
 		if (toDelay) setTimeout(() => this.broadcast(item), 2000)
-		else this.broadcast(item)
+		else this.broadcast(item)*/
 	}
 
 	private checkIfExisting(item: Item): void {
@@ -429,18 +447,30 @@ export default class Vessel {
 		if (!this.permissions.read) return
 
 		this.logger(this.loggerconf.remote, "<-", item.lastAction, item.path)
+
+		const post = (resarr: Resolution[]) => {
+			this.index.save()
+			resarr.forEach(res => {
+				if (res.noio) return
+				if (res.new) this.applyIO(res.after, data)
+				else if (res.rename && res.before) this.moveFile(res.before, res.after)
+			})
+		}
+		this.index.putInQ(item, post)
+		/*
 		this.index.apply(item).forEach(res => {
-			/*
+			
 			if (res.after.lastAction === AT.MovedTo) return
 			if (res.new && res.after.lastAction === AT.MovedFrom) {
 				if (!res.after.tomb?.movedTo) throw Error()
 				this.moveFile(res.after, this.index.dig(res.after))
-			*/
+			
 			if (res.new) this.applyIO(res.after, data)
 			else if (res.rename && res.before) this.moveFile(res.before, res.after)
 			else throw Error()
 		})
 		this.index.save()
+		*/
 
 		//TODO: forward to known peers
 	}

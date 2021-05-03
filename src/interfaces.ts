@@ -71,6 +71,11 @@ export interface CargoListOptions {
 	dirrp?: DirRPConfig
 }
 
+export interface QueueItem {
+	item: Item
+	post?: (resarr: Resolution[]) => void
+}
+
 // ---------------- LOG ----------------
 export interface LogId {
 	n: number
@@ -105,6 +110,7 @@ export interface Resolution {
 	new?: boolean
 	rename?: boolean
 	overwrite?: boolean
+	noio?: boolean
 }
 
 export type ResolveLogic = (item1: Item, item2: Item) => Resolution[]

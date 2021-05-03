@@ -10,6 +10,7 @@ import {
 	IndexArray,
 	ResolveLogic as RL,
 	CargoListOptions,
+	QueueItem,
 } from "./interfaces"
 import { LWWDirConfig, LWWFileConfig } from "./ResolvePolicies/defaultconfigs"
 import { makefpmap, makedpmap } from "./ResolvePolicies/ResolvePolicies"
@@ -31,6 +32,8 @@ export default class CargoList {
 	private rsdir: Map<string, RL>
 	private rsdirp: Map<string, RO>
 	private lastActionId = "0"
+	private queue: QueueItem[] = []
+	private timerid: NodeJS.Timeout
 
 	get DUMMY(): Item {
 		return CargoList.Item("", IT.File, AT.Change, "zzz")
@@ -45,6 +48,12 @@ export default class CargoList {
 		const drs = makedpmap(opts?.dirrp ?? LWWDirConfig)
 		this.rsdir = drs[0]
 		this.rsdirp = drs[1]
+		this.timerid = setInterval(() => this.processNext(), 100)
+	}
+
+	stop(): void {
+		clearInterval(this.timerid)
+		this.save()
 	}
 
 	verEq(actionid: string): boolean {
@@ -107,6 +116,18 @@ export default class CargoList {
 		this.save()
 	}
 
+	putInQ(item: Item, post?: (resarr: Resolution[]) => void): void {
+		this.queue.push({ item, post })
+	}
+
+	processNext(): void {
+		if (this.queue.length === 0) return
+		const qitem = this.queue.shift()
+		if (!qitem) return
+		const resarr = this.apply(qitem.item)
+		qitem.post?.(resarr)
+	}
+
 	apply(item: Item): Resolution[] {
 		this.lastActionId = item.actionId
 		if (item.path === this.indexpath) return []
@@ -167,12 +188,18 @@ export default class CargoList {
 						this.push(res.before)
 						res.before.lastAction = AT.MovedFrom
 						res.after.lastAction = AT.MovedTo
+						const newid = uuid(res.after.path)
+						res.before.id = newid
+						res.after.id = newid
 						res.before.tomb = { type: TT.Moved, movedTo: res.after.path }
 						this.push(res.after)
 					} else if (res.overwrite) this.push(res.after)
 				} else if (res.rename) {
 					res.before.lastAction = AT.MovedFrom
 					res.after.lastAction = AT.MovedTo
+					const newid = uuid(res.after.path)
+					res.before.id = newid
+					res.after.id = newid
 					res.before.tomb = { type: TT.Moved, movedTo: res.after.path }
 					this.push(res.after)
 				}

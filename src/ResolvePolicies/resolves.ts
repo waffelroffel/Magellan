@@ -1,5 +1,5 @@
 import { extname } from "path"
-import { ResolveOption as RO } from "../enums"
+import { ActionType, ResolveOption as RO } from "../enums"
 import { Item, Resolution, ResolveLogic } from "../interfaces"
 import { comp, deepcopy, identical } from "../utils"
 
@@ -46,6 +46,7 @@ function dup(i1: Item, i2: Item): Resolution[] {
 			ro: RO.DUP,
 			new: true,
 			rename: true,
+			noio: i2.lastAction === ActionType.Remove, // ActionType.FromTo
 		}
 		return [newi]
 	}
@@ -55,6 +56,7 @@ function dup(i1: Item, i2: Item): Resolution[] {
 		after: newname(deepcopy(i1)),
 		ro: RO.DUP,
 		rename: true,
+		noio: i2.lastAction === ActionType.Remove, // ActionType.FromTo
 	}
 	const newi = {
 		before: i2, // temp
@@ -62,6 +64,7 @@ function dup(i1: Item, i2: Item): Resolution[] {
 		ro: RO.DUP,
 		new: true,
 		overwrite: true,
+		noio: i2.lastAction === ActionType.Remove, // ActionType.FromTo
 	}
 	return [oldi, newi]
 }
