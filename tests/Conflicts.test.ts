@@ -7,7 +7,7 @@ import { SETTINGS_3P, TESTROOT, TEST_VESSEL_OPTS } from "./config"
 import make_test_env from "./setup_env"
 import { assertDirsAndFiles, assertIndices, delay } from "./utils"
 
-test("initial sync", async () => {
+test("distinct files", async () => {
 	const users = ["dave", "evan"]
 
 	make_test_env(users, [1, 0], [1, 0])
@@ -19,7 +19,7 @@ test("initial sync", async () => {
 	vessels[0].new(SHARE_TYPE.All2All)
 	vessels[1].join(vessels[0].nid)
 
-	await delay(500)
+	await delay(1000)
 
 	expect(assertIndices(vessels)).toBe(false)
 	expect(assertDirsAndFiles(roots)).toBe(false)
@@ -27,12 +27,12 @@ test("initial sync", async () => {
 	vessels[0].connect()
 	vessels[1].connect()
 
-	await delay(500)
+	await delay(1000)
 
 	vessels[0].exit()
 	vessels[1].exit()
 
-	await delay(500)
+	await delay(1000)
 
 	expect(assertIndices(vessels)).toBe(true)
 	expect(assertDirsAndFiles(roots)).toBe(true)
@@ -56,20 +56,20 @@ test("concurrent files", async () => {
 
 	vessels.forEach(v => v.rejoin())
 
-	await delay(500)
+	await delay(1000)
 
 	roots.forEach((r, i) => writeFile(join(r, "dup.txt"), users[i]))
 
-	await delay(1500)
+	await delay(2000)
 
 	vessels.forEach(v => v.watcher.close())
 	vessels.forEach(v => v.connect())
 
-	await delay(500)
+	await delay(1000)
 
 	vessels.forEach(v => v.exit())
 
-	await delay(500)
+	await delay(1000)
 
 	expect(assertIndices(vessels)).toBe(true)
 	expect(assertDirsAndFiles(roots)).toBe(true)
@@ -93,19 +93,19 @@ test("renaming files", async () => {
 
 	vessels.forEach(v => v.rejoin())
 
-	await delay(500)
+	await delay(1000)
 
 	vessels.forEach(v => v.connect())
 
-	await delay(500)
+	await delay(1000)
 
 	rename("testroot/dave/d0_0.txt", "testroot/dave/d_dir1/d0_0.txt")
 
-	await delay(1500)
+	await delay(2000)
 
 	vessels.forEach(v => v.exit())
 
-	await delay(500)
+	await delay(1000)
 
 	expect(assertIndices(vessels)).toBe(true)
 	expect(assertDirsAndFiles(roots)).toBe(true)

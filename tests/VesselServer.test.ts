@@ -1,4 +1,4 @@
-import { ResponseCode } from "../src/enums"
+import { ActionType, ItemType, PERMISSION, ResponseCode } from "../src/enums"
 import VesselServer from "../src/VesselServer"
 import Vessel from "../src/Vessel"
 import fetch from "node-fetch"
@@ -7,6 +7,8 @@ import {
 	FetchOptions,
 	IndexArray,
 	Invite,
+	Item,
+	NID,
 	Sid,
 	VesselResponse,
 } from "../src/interfaces"
@@ -32,13 +34,26 @@ function apifetch<T = undefined>(
 	}).then(res => res.json())
 }
 
+const item: Item = {
+	path: "test.txt",
+	id: "1b45d92d-829a-4204-934e-1494306f99b2",
+	type: ItemType.File,
+	lastModified: 0,
+	lastAction: ActionType.Add,
+	lastActionBy: "robot",
+	actionId: "1b45d92d-829a-4204-934e-1414306f99b2",
+	hash: "001aa9b3369386a9ee468c74a74330d8f4aaf9656d115579aa304b5aac950194",
+	clock: [["robot", 1]],
+}
+
 function mockVesselFns(vessel: Vessel): void {
 	Object.defineProperty(vessel, "isAdmin", { get: jest.fn(() => true) }) // jest.spyOn(vessel, "isAdmin", "get").mockReturnValue(true)
 	vessel.getIndexArray = () => TEST_INDEXARRAY
 	vessel.invite = () => TEST_INVITE
 	vessel.getData = () => TEST_TEXT
-	vessel.addPeer = () => true
-	vessel.requestPerm = () => true
+	vessel.addPeer = () => true // TODO
+	vessel.checkIndexVer = (_: NID, id: string) =>
+		id !== "1234" ? (["", [item]] as unknown as IndexArray) : null
 }
 
 beforeAll(async () => {
@@ -49,6 +64,10 @@ beforeAll(async () => {
 })
 
 describe("VesselServer CMDs", () => {
+	test("default", async () => {
+		const res = await cmdfetch("something")
+		expect(res.code).toBe(ResponseCode.ERR)
+	})
 	test("nid", async () => {
 		const res = await cmdfetch("nid")
 		expect(res.code).toBe(ResponseCode.DNE)
@@ -57,9 +76,17 @@ describe("VesselServer CMDs", () => {
 		const res = await cmdfetch("connect")
 		expect(res.code).toBe(ResponseCode.DNE)
 	})
-	test("default", async () => {
-		const res = await cmdfetch("something")
-		expect(res.code).toBe(ResponseCode.ERR)
+	test("disconnect", async () => {
+		const res = await cmdfetch("disconnect")
+		expect(res.code).toBe(ResponseCode.DNE)
+	})
+	test("exit", async () => {
+		const res = await cmdfetch("exit")
+		expect(res.code).toBe(ResponseCode.DNE)
+	})
+	test("vanish", async () => {
+		const res = await cmdfetch("vanish")
+		expect(res.code).toBe(ResponseCode.DNE)
 	})
 })
 
@@ -101,6 +128,40 @@ describe("VesselServer APIs", () => {
 		})
 		expect(res.code).toBe(ResponseCode.DNE)
 		expect(res.msg).toBe("Peer already registred")
+	})
+	test("reqpermission", async () => {
+		const res = await apifetch(APIS.reqPerm, {
+			params: `?get=${PERMISSION.WRITE}`, // FIX
+			body: JSON.stringify({ host: "localhost", port: 8111 }),
+		})
+		expect(res.code).toBe(ResponseCode.DNE)
+		expect(res.msg).toBe(`${PERMISSION.WRITE} permission under review`)
+	})
+	test("grantpermission", async () => {
+		const res = await apifetch(APIS.grantPerm, {
+			body: JSON.stringify({ priv: PERMISSION.WRITE, grant: true }),
+		})
+		expect(res.code).toBe(ResponseCode.DNE)
+		expect(res.msg).toBe(`${PERMISSION.WRITE} permission received`)
+	})
+	test("checkindex", async () => {
+		const res1 = await apifetch<IndexArray>(APIS.checkIndexVer, {
+			body: JSON.stringify({
+				nid: { host: "localhost", port: 8111 },
+				id: "1234",
+			}),
+		})
+		expect(res1.data).toBeUndefined()
+		expect(res1.code).toBe(ResponseCode.DNE)
+
+		const res2 = await apifetch<IndexArray>(APIS.checkIndexVer, {
+			body: JSON.stringify({
+				nid: { host: "localhost", port: 8111 },
+				id: "1111",
+			}),
+		})
+		expect(res2.data).toBeDefined()
+		expect(res2.code).toBe(ResponseCode.DNE)
 	})
 })
 

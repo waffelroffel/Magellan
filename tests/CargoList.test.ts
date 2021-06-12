@@ -2,10 +2,11 @@ import { ActionType as AT, ItemType as IT } from "../src/enums"
 import CargoList from "../src/CargoList"
 import { TESTROOT } from "./config"
 
-test("CargoList test lww", () => {
+test("CargoList lww", () => {
 	const cl = new CargoList(TESTROOT)
 	const i1 = CargoList.Item("file1.txt", IT.File, AT.Add, "alice")
 	const i2 = CargoList.Item("file2.txt", IT.File, AT.Add, "bob")
+
 	cl.apply(i1)
 	cl.apply(i2)
 	const indexarr = cl.asArray()
@@ -14,7 +15,7 @@ test("CargoList test lww", () => {
 	expect(indexarr[1][1].length).toBe(1)
 })
 
-test("CargoList test dup", () => {
+test("CargoList rename", () => {
 	const cl = new CargoList(TESTROOT)
 	const i1 = CargoList.Item("file.txt", IT.File, AT.Add, "alice")
 	const i2 = CargoList.Item("file.txt", IT.File, AT.Add, "bob")

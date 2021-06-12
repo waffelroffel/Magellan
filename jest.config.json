@@ -5,7 +5,7 @@
 		"^.+\\.ts$": "ts-jest"
 	},
 	"collectCoverage": true,
-	"collectCoverageFrom": ["src/**/*.ts"],
+	"collectCoverageFrom": ["src/**/*.ts", "!src/Proxies/LocalProxy.ts"],
 	"coverageDirectory": "cov",
 	"coverageThreshold": {}
 }
