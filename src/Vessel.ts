@@ -8,7 +8,6 @@ import {
 	Medium,
 	SHARE_TYPE as ST,
 	PERMISSION,
-	TombType,
 } from "./enums"
 import {
 	Item,
@@ -22,15 +21,14 @@ import {
 	Resolution,
 	PermissionGrant,
 } from "./interfaces"
-import ProxyInterface from "./ProxyInterface"
+import ProxyList from "./ProxyList"
 import { ct, cts, increment, randint } from "./utils"
 import Proxy from "./Proxies/Proxy"
 import VesselServer from "./VesselServer"
 import LocalProxy from "./Proxies/LocalProxy"
 import PermissionManager from "./Permissions"
 import ABCStorage from "./Storages/ABCStorage"
-import { LocalStorage } from "./Storages/LocalDrive"
-import SkipList from "./SkipList"
+import { LocalDrive } from "./Storages/LocalDrive"
 import { checkLoggerConfig } from "./defaultconf"
 
 export default class Vessel {
@@ -40,7 +38,6 @@ export default class Vessel {
 	TABLE_END = "indextable.json"
 	settingspath: string
 	SETTINGS_END = "settings.json"
-	skiplist = new SkipList()
 	potmovefiles = new Map<string, Item>()
 	init = true
 	ignoreNewOnRejoin = false
@@ -53,7 +50,7 @@ export default class Vessel {
 
 	private onlocal = new Set<string>()
 	private _index: CargoList
-	private _proxylist = new ProxyInterface()
+	private _proxylist = new ProxyList()
 	private admin = false
 	private permissions: Permissions = { write: false, read: false }
 	private permreqlist: { nid: NID; perm: PERMISSION }[] = []
@@ -69,7 +66,7 @@ export default class Vessel {
 		return this._index
 	}
 
-	get proxylist(): ProxyInterface {
+	get proxylist(): ProxyList {
 		return this._proxylist
 	}
 
@@ -99,7 +96,7 @@ export default class Vessel {
 		this.tablepath = join(root, this.TABLE_END)
 		this.settingspath = join(root, this.SETTINGS_END)
 		this.ignored = [this.TABLE_END, this.SETTINGS_END, ".temp/**"]
-		this._index = new CargoList(this.tablepath, opts)
+		this._index = new CargoList(this.tablepath)
 		this.nid = {
 			host: opts?.host ?? "localhost",
 			port: opts?.port ?? randint(8000, 8888),
@@ -111,7 +108,7 @@ export default class Vessel {
 	private initStorage(root: string, type: string): ABCStorage {
 		switch (type) {
 			case "local":
-				return new LocalStorage(root)
+				return new LocalDrive(root)
 			default:
 				throw Error()
 		}
@@ -191,7 +188,7 @@ export default class Vessel {
 		this.saveSettings()
 		this.index.stop()
 		this.logger(this.loggerconf.offline, "EXITED")
-		if (this.store instanceof LocalStorage) this.store.flush()
+		if (this.store instanceof LocalDrive) this.store.flush()
 		return this
 	}
 
@@ -330,7 +327,7 @@ export default class Vessel {
 		const latest = this.index.getLatest(item.path)
 		if (latest && item.lastModified < latest.lastModified) return
 		if (type === IT.File) {
-			item.hash = await this.store.computehash(item)
+			item.hash = this.store.computehash(item)
 			if (latest && latest.hash !== item.hash) throw Error("hash unequal")
 			item.id = latest?.id ?? item.id
 			item.clock = latest?.clock ?? item.clock
@@ -349,7 +346,6 @@ export default class Vessel {
 
 	private async applyLocal(path: string, type: IT, action: AT): Promise<void> {
 		if (!this.permissions.write) return
-		//if (this.skiplist.reduce(path)) return
 
 		const item = CargoList.Item(path, type, action, this.user)
 		item.lastModified = this.store.lastmodified(item) ?? ct()
@@ -357,13 +353,11 @@ export default class Vessel {
 		if (type === IT.File && action !== AT.Remove)
 			item.hash = this.store.computehash(item)
 
-		const tmp = this.index.getLatest(item.path)?.hash
-		if (tmp === item.hash) return //console.log(this.user, "skip", path, type, action, tmp, item.hash)
+		const skip = this.index.getLatest(item.path)
+		if (skip?.hash === item.hash) return
 
 		this.checkIfExisting(item)
 		this.checkIfLocal(item)
-		const toDelay = false
-		this.checkForMoved
 
 		this.logger(this.loggerconf.local, "->", action, item.path)
 
@@ -373,8 +367,7 @@ export default class Vessel {
 			this.index.save()
 
 			if (!this.online) return
-			if (toDelay) setTimeout(() => this.broadcast(item), 2000)
-			else this.broadcast(item)
+			this.broadcast(item)
 		}
 		this.index.putInQ(item, post)
 	}
@@ -409,31 +402,8 @@ export default class Vessel {
 		}
 	}
 
-	private checkForMoved(item: Item): boolean {
-		const key = item.hash ?? item.path
-		switch (item.lastAction) {
-			case AT.Add: {
-				const potmoved = this.potmovefiles.get(key)
-				if (!potmoved) return false
-				item.id = potmoved.id
-				item.clock = increment(potmoved.clock, this.user)
-				item.lastAction = AT.MovedTo
-				potmoved.lastAction = AT.MovedFrom
-				potmoved.tomb = { type: TombType.Moved, movedTo: item.path }
-				this.potmovefiles.delete(key)
-				return true
-			}
-			case AT.Remove:
-				this.potmovefiles.set(key, item)
-				setTimeout(() => this.potmovefiles.delete(key), 5000)
-				return true
-			default:
-				return false
-		}
-	}
-
 	private broadcast(item: Item): void {
-		this.proxylist.broadcast(item, () => this.getData(item))
+		this.proxylist.broadcast(item, this.getData(item) ?? undefined) // () => this.getData(item)
 	}
 
 	// applyIncoming(item: Item, rs?: NodeJS.ReadableStream): void {
@@ -458,30 +428,14 @@ export default class Vessel {
 	private moveFile(from: Item, to: Item): void {
 		this.checkIfLocal(from)
 		this.checkIfLocal(to)
-		//this.skiplist.add(from.path, 1).add(to.path, 1)
 		this.store.move(from, to)
-		/*
-		if (!this.store.move(from, to)) {
-			this.skiplist.reduce(from.path)
-			this.skiplist.reduce(to.path)
-		}
-		setTimeout(() => {
-			this.skiplist.delete(from.path)
-			this.skiplist.delete(to.path)
-		}, 10000)
-		*/
 	}
 
 	// private applyIO(item: Item, rs?: NodeJS.ReadableStream): void {
 	private applyIO(item: Item, data?: string): void {
 		this.checkIfLocal(item)
-		//this.skiplist.add(item.path, 1)
 		if (item.type === IT.Dir) this.store.applyFolderIO(item)
-		//&& !this.store.applyFolderIO(item))
-		//this.skiplist.reduce(item.path)
-		else if (item.type === IT.File) this.store.applyFileIO(item, data) // && !this.store.applyFileIO(item, data))
-		//this.skiplist.reduce(item.path)
-		//setTimeout(() => this.skiplist.delete(item.path), 10000)
+		else if (item.type === IT.File) this.store.applyFileIO(item, data)
 	}
 
 	getData(item: Item): string | null {
@@ -535,6 +489,10 @@ export default class Vessel {
 		})
 
 		this.index.save()
+	}
+
+	getDefaultPerms(): { write: boolean; read: boolean } {
+		return PermissionManager.defaultPerms(this.sharetype)
 	}
 
 	requestPerm(nid: NID, perm: PERMISSION): void {

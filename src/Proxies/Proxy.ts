@@ -1,3 +1,4 @@
+import { PERMISSION } from "../enums"
 import {
 	Item,
 	NID,
@@ -14,8 +15,8 @@ export default abstract class Proxy {
 	abstract fetchItems(items: Item[]): ProxyRes<string>[]
 	abstract fetchIndex(): ProxyRes<IndexArray>
 	abstract getinvite(src: NID): ProxyRes<Invite>
-	abstract addPeer(src: Vessel | NID): ProxyRes<void>
-	abstract reqPerm(src: NID): void
+	abstract addPeer(src: Vessel | NID): void
+	abstract reqPerm(src: NID, perm: PERMISSION): void
 	abstract grantPerm(grant: PermissionGrant): void
 	abstract checkIndexVer(id: string): ProxyRes<IndexArray>
 }

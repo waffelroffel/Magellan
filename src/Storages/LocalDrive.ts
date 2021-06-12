@@ -14,21 +14,22 @@ import { Item } from "../interfaces"
 import { uuid } from "../utils"
 import ABCStorage from "./ABCStorage"
 
-/**
- * interface to local storage
- * TODO: move chokidar inside
- */
-export class LocalStorage extends ABCStorage {
+export class LocalDrive extends ABCStorage {
 	root: string
 	canwrite: AT[] = [AT.Add, AT.Change, AT.MovedTo]
 	tempfolder = ".temp"
 	tempdeleted = new Map<string, [string, number]>()
-	iocache = new Map<string, string>()
+	iocache = new Map<string, string>() // TODO add timer and cache
 
 	constructor(root: string) {
 		super()
 		this.root = root
-		mkdirSync(join(this.root, this.tempfolder))
+		const temp = join(this.root, this.tempfolder)
+		if (!existsSync(temp)) mkdirSync(join(this.root, this.tempfolder))
+	}
+
+	exists(item: Item): boolean {
+		return existsSync(this.relpath(item))
 	}
 
 	relpath(item: Item): string {
@@ -42,8 +43,10 @@ export class LocalStorage extends ABCStorage {
 	}
 
 	computehash(item: Item): string {
+		const relpath = this.relpath(item)
+		if (!existsSync(relpath)) throw Error()
 		const hash = createHash("sha256")
-		const data = readFileSync(this.relpath(item))
+		const data = readFileSync(relpath)
 		return hash.update(data).digest("hex")
 	}
 
@@ -64,51 +67,9 @@ export class LocalStorage extends ABCStorage {
 		}
 		return false
 	}
-	/*
-	async applyFileIO(item: Item, rs?: NodeJS.ReadableStream): Promise<boolean> {
-		if (!item.hash) throw Error()
-		// write to .tmp then change ext
-		const relpath = this.relpath(item)
-		const exists = existsSync(relpath)
-		if (item.lastAction === AT.Remove && exists) {
-			const tmppath = join(this.root, this.tempfolder, uuid())
-			this.tempdeleted.set(item.hash, [tmppath, new Date().valueOf()])
-			this.iocache.delete(item.path)
-			return rename(relpath, tmppath).then(() => true)
-		}
-		if (this.canwrite.includes(item.lastAction)) {
-			const fpath = this.tempdeleted.get(item.hash)?.[0]
-			if (fpath) {
-				const tmprs = createReadStream(fpath)
-				this.writeToCache(item.path, tmprs)
-				tmprs.pipe(createWriteStream(relpath))
-				this.tempdeleted.delete(item.hash)
-				return new Promise(res =>
-					tmprs.on("end", async () => {
-						if (item.hash !== (await this.computehash(item)))
-							console.log("hash wrong")
-						res(true)
-					})
-				)
-			} else if (rs) {
-				this.writeToCache(item.path, rs)
-				rs.pipe(createWriteStream(relpath))
-				return new Promise(res =>
-					rs.on("end", async () => {
-						if (item.hash !== (await this.computehash(item)))
-							console.log("hash wrong")
-						res(true)
-					})
-				)
-			} else throw Error()
-		}
-		return false
-	}
-	*/
 
 	applyFileIO(item: Item, data?: string): boolean {
 		if (!item.hash) throw Error()
-		// write to .tmp then change ext
 		const relpath = this.relpath(item)
 		const exists = existsSync(relpath)
 		if (item.lastAction === AT.Remove && exists) {
@@ -164,19 +125,8 @@ export class LocalStorage extends ABCStorage {
 	}
 
 	createRS(item: Item): NodeJS.ReadableStream | null {
-		item
+		item // TODO: placeholder
 		return null
-		/*
-		if (item.type === IT.Dir || item.lastAction === AT.Remove) return null
-		const cached = this.iocache.get(item.path)
-		if (cached) {
-			//console.log("reading from cache")
-			return Readable.from(cached)
-		}
-		const relpath = this.relpath(item)
-		if (!existsSync(relpath)) throw Error(`${relpath} doesn't exist`)
-		return createReadStream(relpath)
-		*/
 	}
 
 	move(from: Item, to: Item): boolean {
@@ -188,7 +138,6 @@ export class LocalStorage extends ABCStorage {
 	}
 
 	flush(): void {
-		//console.log(this.iocache)
-		//this.iocache.forEach((v, k) => writeFileSync(join(this.root, k), v[0]))
+		this.iocache.forEach((v, k) => writeFileSync(join(this.root, k), v))
 	}
 }

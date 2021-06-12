@@ -38,7 +38,7 @@ export interface LoggerConfig {
 	vanish?: boolean
 }
 
-export interface VesselOptions extends CargoListOptions {
+export interface VesselOptions {
 	loggerconf?: LoggerConfig
 	host?: string
 	port?: number
@@ -55,7 +55,7 @@ export interface Item {
 	type: ItemType
 	lastModified: number
 	lastAction: ActionType
-	lastActionBy: string
+	lastActionBy: string // TODO: change to uuid
 	actionId: string
 	hash?: string // Files only
 	tomb?: Tomb
@@ -67,11 +67,6 @@ export interface Item {
 export type VectorClock = [string, number][]
 
 export type IndexArray = [string, Item[]][]
-
-export interface CargoListOptions {
-	filerp?: FileRPConfig
-	dirrp?: DirRPConfig
-}
 
 export interface QueueItem {
 	item: Item
@@ -116,21 +111,6 @@ export interface Resolution {
 }
 
 export type ResolveLogic = (item1: Item, item2: Item) => Resolution[]
-
-export interface FileRPConfig {
-	addadd: ResolveOption
-	addrem: ResolveOption
-	addchg: ResolveOption
-	remrem: ResolveOption
-	remchg: ResolveOption
-	chgchg: ResolveOption
-}
-
-export interface DirRPConfig {
-	addadd: ResolveOption
-	addrem: ResolveOption
-	remrem: ResolveOption
-}
 
 // ---------------- PERMISSIONS ----------------
 export interface Permissions {

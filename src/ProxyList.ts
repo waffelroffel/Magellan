@@ -4,7 +4,7 @@ import LocalProxy from "./Proxies/LocalProxy"
 import Proxy from "./Proxies/Proxy"
 import HTTPProxy from "./Proxies/HTTPProxy"
 
-export default class ProxyInterface extends Array<Proxy> {
+export default class ProxyList extends Array<Proxy> {
 	addNode(type: Medium, data: ProxyOption): Proxy {
 		const proxy = this.createProxy(type, data)
 		if (!proxy) throw Error("NetworkInterface.addNode: null from createProxy")
@@ -14,13 +14,21 @@ export default class ProxyInterface extends Array<Proxy> {
 
 	get(nid: NID): Proxy | null {
 		const p = this.filter(p => p instanceof HTTPProxy).find(
-			p => (p as HTTPProxy).nid === nid
+			p =>
+				p instanceof HTTPProxy &&
+				p.nid.host === nid.host &&
+				p.nid.port === nid.port
 		)
 		return p ?? null
 	}
 
 	has(nid: NID): boolean {
-		return this.some(p => p instanceof HTTPProxy && p.nid === nid)
+		return this.some(
+			p =>
+				p instanceof HTTPProxy &&
+				p.nid.host === nid.host &&
+				p.nid.port === nid.port
+		)
 	}
 
 	private createProxy(type: Medium, data: ProxyOption): Proxy | null {
@@ -37,8 +45,10 @@ export default class ProxyInterface extends Array<Proxy> {
 		if (i === -1) throw Error("ProxyInterface.removeNode: not in array")
 		this.splice(i, 1)
 	}
-	broadcast(item: Item, getData: () => string | null): void {
-		this.forEach(p => p.send(item, getData() ?? undefined))
+
+	broadcast(item: Item, data?: string): void {
+		// getData: () => string | null
+		this.forEach(p => p.send(item, data))
 	}
 
 	serialize(): { nid: NID }[] {

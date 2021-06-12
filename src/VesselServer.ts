@@ -135,20 +135,20 @@ export default class VesselServer {
 		this.server.post<{
 			Querystring: { get: PERMISSION }
 			Body: NID
-			Reply: VesselResponse<PermissionGrant>
+			Reply: VesselResponse
 		}>("/reqpermission", async req => {
 			if (!this.vessel.isAdmin) return { msg: "Peer not admin", code: RC.ERR }
 			this.vessel.requestPerm(req.body, req.query.get)
 			return { msg: `${req.query.get} permission under review`, code: RC.DNE }
 		})
 
-		this.server.post<{
-			Body: PermissionGrant
-			Reply: VesselResponse<PermissionGrant>
-		}>("/grantpermission", async req => {
-			this.vessel.setPerm(req.body)
-			return { msg: `${req.body.priv} permission received`, code: RC.DNE }
-		})
+		this.server.post<{ Body: PermissionGrant; Reply: VesselResponse }>(
+			"/grantpermission",
+			async req => {
+				this.vessel.setPerm(req.body)
+				return { msg: `${req.body.priv} permission received`, code: RC.DNE }
+			}
+		)
 
 		this.server.post<{
 			Body: { nid: NID; id: string }

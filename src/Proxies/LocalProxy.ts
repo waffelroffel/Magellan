@@ -1,7 +1,7 @@
 import { Item, IndexArray, Invite, PermissionGrant } from "../interfaces"
-import PermissionManager from "../Permissions"
 import Vessel from "../Vessel"
 import Proxy from "./Proxy"
+// TODO
 
 export default class LocalProxy extends Proxy {
 	private local: Vessel
@@ -27,7 +27,7 @@ export default class LocalProxy extends Proxy {
 		return {
 			sharetype: this.local.sharetype,
 			peers: this.local.proxylist.serialize().map(p => p.nid),
-			perms: PermissionManager.defaultPerms(this.local.sharetype),
+			perms: this.local.getDefaultPerms(),
 		}
 	}
 

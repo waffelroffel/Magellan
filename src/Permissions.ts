@@ -1,12 +1,7 @@
-import { SHARE_TYPE, PERMISSION } from "./enums"
-import { NID, Permissions } from "./interfaces"
+import { SHARE_TYPE } from "./enums"
 
-/**
- * TODO: finer granulated privileges
- * only admins and specific peers can have a PermissionManager
- * All2All -> no PermissionManager
- */
 export default class PermissionManager {
+	/* TODO
 	private canread = new Map<NID, boolean>()
 	private canwrite = new Map<NID, boolean>()
 
@@ -45,12 +40,13 @@ export default class PermissionManager {
 				return this.canwrite.has(nid)
 		}
 	}
+	*/
 
 	static defaultPerms(st: SHARE_TYPE): { write: boolean; read: boolean } {
 		switch (st) {
 			case SHARE_TYPE.All2All:
 				return { write: true, read: true }
-			case SHARE_TYPE.One2Aall:
+			case SHARE_TYPE.One2All:
 				return { write: false, read: true }
 		}
 	}
