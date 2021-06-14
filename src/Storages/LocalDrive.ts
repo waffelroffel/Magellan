@@ -109,11 +109,9 @@ export class LocalDrive extends ABCStorage {
 		if (item.type === IT.Dir || item.lastAction === AT.Remove) return null
 		const cached = this.iocache.get(item.path)
 		if (cached) {
-			//console.log("reading from cache", cached)
 			if (this.hash(cached) === item.hash) return cached
-			const newdata = readFileSync(this.relpath(item), { encoding: "utf8" }) //
+			const newdata = readFileSync(this.relpath(item), { encoding: "utf8" })
 			this.iocache.set(item.path, newdata)
-			//console.log("updating cache getData:", newdata)
 			return newdata
 		}
 		const relpath = this.relpath(item)

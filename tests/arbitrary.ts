@@ -30,15 +30,15 @@ async function main(): Promise<void> {
 
 	vessels[2].connect()
 
-	await delay(5000)
+	await delay(2000)
 
 	run(vessels)
 
-	await delay(25000)
+	await delay(30000)
 
 	vessels.forEach(v => v.exit())
 
-	await delay(4000)
+	await delay(5000)
 
 	console.log("Index post assert:", assertIndices(vessels))
 	console.log("Files/Dirs post assert:", assertDirsAndFiles(roots))
@@ -48,7 +48,7 @@ function run(vessels: Vessel[]): void {
 	const pool = make_oplist()
 	vessels.forEach(async v => {
 		for (let _ = 0; _ < 3; _++) {
-			await delay(randint(3000, 6000))
+			await delay(randint(2000, 6000))
 			const op = pool[randint(0, pool.length)]
 			const files = v.index.asArray().map(kv => join(v.root, kv[0]))
 			const file = files[randint(0, files.length)]
@@ -64,9 +64,9 @@ function run(vessels: Vessel[]): void {
 
 function make_oplist(): ((file: string) => [string, string])[] {
 	const ops: [(file: string) => [string, string], number][] = [
-		[randappend, 3],
-		[randdelete, 1],
-		[randcreate, 2],
+		[randappend, 1],
+		[randdelete, 0],
+		[randcreate, 3],
 	]
 
 	const oplist: ((file: string) => [string, string])[] = []

@@ -1,7 +1,7 @@
 {
 	"name": "magellan",
-	"description": "CRDT-based P2P file synchronization",
-	"version": "0.0.1",
+	"description": "A CRDT-based file syncing system",
+	"version": "1.0.0",
 	"repository": {
 		"type": "git",
 		"url": "https://github.com/waffelroffel/Magellan.git"

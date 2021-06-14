@@ -354,7 +354,9 @@ export default class Vessel {
 			item.hash = this.store.computehash(item)
 
 		const skip = this.index.getLatest(item.path)
-		if (skip?.hash === item.hash) return
+		if (type === IT.Dir && skip && skip.lastAction === action) return // temp solution, all folder with same name will merge
+		if (type === IT.File && skip?.lastAction === AT.Remove) return
+		if (type === IT.File && skip?.hash === item.hash) return
 
 		this.checkIfExisting(item)
 		this.checkIfLocal(item)
@@ -367,7 +369,7 @@ export default class Vessel {
 			this.index.save()
 
 			if (!this.online) return
-			this.broadcast(item)
+			this.broadcast(item) // empty files are not sent
 		}
 		this.index.putInQ(item, post)
 	}

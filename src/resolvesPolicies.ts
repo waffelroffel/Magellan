@@ -1,5 +1,5 @@
 import { extname } from "path"
-import { ActionType, ResolveOption as RO } from "./enums"
+import { ActionType, ItemType, ResolveOption as RO } from "./enums"
 import { Item, Resolution } from "./interfaces"
 import { comp, deepcopy, identical } from "./utils"
 
@@ -74,6 +74,7 @@ function newname(i: Item): Item {
 	const name = i.path.substring(0, i.path.lastIndexOf("."))
 	const user = i.lastActionBy
 	const ext = extname(i.path)
-	i.path = `${name}-${user}${ext}`
+	i.path =
+		i.type === ItemType.Dir ? `${i.path}-${user}` : `${name}-${user}${ext}`
 	return i
 }
